@@ -151,11 +151,34 @@ stage_dms() {
          "${user_unit_dir}/graphical-session.target.wants/dms.service"; then
       die "failed to symlink dms.service into ${user_unit_dir}/graphical-session.target.wants/"
     fi
-    # Verify: the symlink must resolve to a real unit file.
-    if [[ ! -e "${user_unit_dir}/graphical-session.target.wants/dms.service" ]]; then
-      die "dms.service symlink is dangling: ${user_unit_dir}/graphical-session.target.wants/dms.service"
-    fi
-    info "enabled dms user service (graphical-session.target.wants/dms.service)"
+    # Override dms.service: the upstream unit requires
+    # `Requisite=graphical-session.target` and uses `Type=dbus` claiming
+    # org.freedesktop.Notifications. On raw Hyprland (no GNOME session
+    # manager), graphical-session.target is never activated, so the
+    # upstream Requisite= fails and dms.service refuses to start. Drop
+    # the hard dependency; switch to `Type=simple` so systemd doesn't
+    # wait on a D-Bus name claim that may race with other notification
+    # daemons. dms still claims the bus name on its own.
+    local dropin_dir="${user_unit_dir}/dms.service.d"
+    install -d -m 0755 -o "${target_user}" -g "${target_user}" "${dropin_dir}"
+    cat > "${dropin_dir}/override.conf" <<'DMS_OVERRIDE_EOF'
+[Unit]
+# Upstream unit's Requisite=graphical-session.target never resolves on a
+# raw Hyprland session (no GNOME/KDE session manager activates it).
+# Keep dms.service startable regardless of which target fired the hook.
+Requisite=
+After=graphical-session.target hyprland-session.target
+
+[Service]
+# Upstream uses Type=dbus with BusName=org.freedesktop.Notifications.
+# That makes systemd wait for dms to claim the bus name before
+# considering the service "started". On a clean session without another
+# notification daemon this works, but if a future setup ships mako or
+# dunst, the name conflict aborts dms. Switch to simple and let dms
+# manage its own D-Bus lifecycle.
+Type=simple
+DMS_OVERRIDE_EOF
+    chown "${target_user}:${target_user}" "${dropin_dir}/override.conf"
   fi
   if [[ "$(loginctl show-user "${target_user}" 2>/dev/null | awk -F= '/^Linger=/{print $2}')" != "yes" ]]; then
     if loginctl enable-linger "${target_user}" 2>/dev/null; then

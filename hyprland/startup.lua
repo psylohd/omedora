@@ -19,7 +19,11 @@ local exec_once = {
     "/usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1 || /usr/libexec/polkit-gnome-authentication-agent-1",
     "gnome-keyring-daemon --start --components=secrets",
     "systemctl --user start --ignore-dependencies xdg-desktop-portal-hyprland.service xdg-desktop-portal.service",
-    "dms run",
+    -- dms runs via the systemd user unit dms.service (enabled by
+    -- stage_dms.sh), which has `Requisite=graphical-session.target`.
+    -- hyprland.lua activates that target before require("startup")
+    -- runs, so dms.service will start on its own. Launching `dms run`
+    -- here directly would race the systemd unit for the same IPC socket.
     "wl-clip-persist --clipboard regular",
     "sh -c 'sleep 3 && easyeffects --gapplication-service'",
 }

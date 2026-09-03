@@ -30,6 +30,13 @@ end
 
 hl.on("hyprland.start", function()
 	hl.exec_cmd("dbus-update-activation-environment --systemd --all")
+	-- Activate graphical-session.target so user services that have
+	-- `Requisite=` / `PartOf=graphical-session.target` (notably dms.service)
+	-- can start. Hyprland itself doesn't activate this target — GNOME's
+	-- gnome-session-binary does that on a typical GNOME login. Without
+	-- this explicit activation, dms.service refuses to start because its
+	-- Requisite=graphical-session.target never becomes active.
+	hl.exec_cmd("systemctl --user start graphical-session.target")
 	hl.exec_cmd("systemctl --user start hyprland-session.target")
 	require("startup")  -- sets exec_once list (dms run, polkit, easyeffects, ...)
 end)
