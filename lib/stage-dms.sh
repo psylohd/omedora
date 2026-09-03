@@ -93,12 +93,11 @@ stage_dms() {
     # hyprland-session.target as a regular FILE, not a directory, so we
     # can't drop a `.wants/` symlink next to it. dms starts fine without
     # the extra hook (graphical-session already pulls it in).
-    install -d -m 0755 -o "${target_user}" -g "${target_user}" \
-      "${user_unit_dir}/graphical-session.target.wants"
+    install -d -m 0755 "${user_unit_dir}/graphical-session.target.wants"
     ln -sf /usr/lib/systemd/user/dms.service \
       "${user_unit_dir}/graphical-session.target.wants/dms.service"
-    chown -h "${target_user}:${target_user}" \
-      "${user_unit_dir}/graphical-session.target.wants/dms.service"
+    # The entire tree must be traversable by the user's systemd manager.
+    chown -R "${target_user}:${target_user}" "${user_unit_dir}"
     info "enabled dms user service (graphical-session.target)"
   fi
   if [[ "$(loginctl show-user "${target_user}" 2>/dev/null | awk -F= '/^Linger=/{print $2}')" != "yes" ]]; then

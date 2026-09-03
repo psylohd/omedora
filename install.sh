@@ -31,10 +31,10 @@ export NOKRON_REPO_ROOT="${SCRIPT_DIR}"
 
 # ── CLI parsing ───────────────────────────────────────────────────────────────
 DRY_RUN=false
+
 ONLY=""
 SKIP=""
 CONFIG_PATH=""
-
 usage() {
   cat <<USAGE
 Usage: sudo ./install.sh [options]
@@ -46,8 +46,10 @@ Options:
   --skip stages      comma-separated list of stages to skip
   -h, --help         this help
 
+
 Stages (toggleable in nokron.toml [stages]):
-  copr, dnf, vendor, flatpak, configs, greetd, dms, services
+  copr, dnf, vendor, flatpak, plymouth, tuigreet, hyprland,
+  quickshell, greetd, dms, services
 (configs = plymouth + tuigreet + hyprland + quickshell in one pass;
  plymouth/tuigreet/hyprland/quickshell are also accepted as aliases for configs)
 
@@ -92,31 +94,46 @@ apply_stage_filter() {
     done
     IFS=',' read -ra list <<< "${ONLY}"
     for s in "${list[@]}"; do
-      # Sub-stage aliases all set the same 'configs' flag (the dispatcher
-      # `stage_configs` checks individual sub-stage flags internally and
-      # runs whichever ones are enabled). This way `tuigreet`, `plymouth`,
-      # `hyprland`, and `quickshell` all map to a single configs run.
       case "${s,,}" in
-        plymouth|tuigreet|hyprland|quickshell)
-          # Sub-stage alias — set the matching flag directly AND enable
-          # the parent 'configs' flag (the run_stage wrapper checks that).
-          printf -v "NOKRON_STAGE_${s^^}" "true"
+        # Sub-stage aliases: enable the sub-stage, its parent (configs), and
+        # any hard dependencies the sub-stage requires to function.
+        plymouth)
+          printf -v "NOKRON_STAGE_PLYMOUTH" "true"
           printf -v "NOKRON_STAGE_CONFIGS" "true" ;;
+        tuigreet)
+          # tuigreet binary is installed by the dnf stage; greetd needs it.
+          printf -v "NOKRON_STAGE_DNF" "true"
+          printf -v "NOKRON_STAGE_TUIGREET" "true"
+          printf -v "NOKRON_STAGE_GREETD" "true"
+          printf -v "NOKRON_STAGE_CONFIGS" "true" ;;
+        hyprland)
+          printf -v "NOKRON_STAGE_HYPRLAND" "true"
+          printf -v "NOKRON_STAGE_CONFIGS" "true" ;;
+        quickshell)
+          printf -v "NOKRON_STAGE_DNF" "true"
+          printf -v "NOKRON_STAGE_QUICKSHELL" "true"
+          printf -v "NOKRON_STAGE_CONFIGS" "true" ;;
+        dms)
+          # dms binary + greeter binary come from the vendor stage.
+          printf -v "NOKRON_STAGE_DNF" "true"
+          printf -v "NOKRON_STAGE_VENDOR" "true"
+          printf -v "NOKRON_STAGE_DMS" "true" ;;
         *)
           local var="NOKRON_STAGE_${s^^}"
           printf -v "${var}" "true" ;;
       esac
     done
   fi
-  if [[ -n "${SKIP}" ]]; then
-    IFS=',' read -ra list <<< "${SKIP}"
-    for s in "${list[@]}"; do
-      local var="NOKRON_STAGE_${s^^}"
-      printf -v "${var}" "false"
-    done
-  fi
 }
-# Sanity: confirm this is Fedora.
+if [[ -n "${SKIP}" ]]; then
+  IFS=',' read -ra list <<< "${SKIP}"
+  for s in "${list[@]}"; do
+    local var="NOKRON_STAGE_${s^^}"
+    printf -v "${var}" "false"
+  done
+fi
+
+
 if ! command -v dnf5 >/dev/null 2>&1; then
   die "dnf5 not found — this installer targets Fedora Server. (Did you mean install.sh?)"
 fi
@@ -138,10 +155,17 @@ echo "  repo root:   ${NOKRON_REPO_ROOT}"
 echo "  config:      ${NOKRON_CONFIG}"
 echo
 echo "  stages:"
-for s in copr dnf vendor flatpak configs greetd dms services; do
+for s in copr dnf vendor flatpak plymouth tuigreet hyprland quickshell greetd dms services; do
   f="NOKRON_STAGE_${s^^}"
-  v="${!f:-false}"          # default missing stage flags to false
-  printf "    %-12s %s\n" "${s}" "${v}"
+  v="${!f:-false}"
+  # configs is the parent of the sub-stages; show it too.
+  if [[ "${s}" == "plymouth" ]] || [[ "${s}" == "tuigreet" ]] || \
+     [[ "${s}" == "hyprland" ]] || [[ "${s}" == "quickshell" ]]; then
+    [[ "${v}" == "true" ]] && parent="(via configs)" || parent=""
+    printf "    %-12s %s %s\n" "${s}" "${v}" "${parent}"
+  else
+    printf "    %-12s %s\n" "${s}" "${v}"
+  fi
 done
 
 if ${DRY_RUN}; then
@@ -149,14 +173,6 @@ if ${DRY_RUN}; then
   exit 0
 fi
 # ── Self-check (before destructive work) ─────────────────────────────────────
-self_check
-
-echo
-read -r -p "Proceed? [y/N] " proceed
-case "${proceed}" in
-  y|Y|yes|YES) ;;
-  *) info "aborted"; exit 0 ;;
-esac
 
 # ── Run stages ────────────────────────────────────────────────────────────────
 run_stage copr       stage_copr

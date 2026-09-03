@@ -5,6 +5,7 @@
 # rely on dnf5's own GPG/transaction logic.
 
 stage_dnf() {
+  section "dnf"
   command -v dnf5 >/dev/null 2>&1 || die "dnf5 not found"
 
   info "installing Hyprland stack (${#NOKRON_HYPRLAND[@]} packages from lionheartp/Hyprland)"

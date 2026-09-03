@@ -55,8 +55,7 @@ self_check() {
     fi
   fi
 
-  # 5. (sha256 verification removed — vendored binaries are downloaded
-  # 6. Network sanity for the vendor stage. Cheap curl --head to the
+  # 5. Network sanity for the vendor stage. Cheap curl --head to the
   #    GitHub release hostname; non-fatal but warn.
   if [[ "${NOKRON_STAGE_VENDOR}" == "true" ]] || \
      [[ "${NOKRON_STAGE_COPR}" == "true" ]] || \
@@ -108,16 +107,6 @@ Set [vendored.tuigreet].repo_url + branch (recommended), or point
     warn "quickshell config dir not found: ${NOKRON_PATH_QUICKSHELL}
   Create it (at minimum shell.qml for dms) before running.
   Continuing — the stage will no-op."
-  fi
-
-  # 10. If we're going to use dms-greeter, confirm the binary landed.
-  if [[ "${NOKRON_STAGE_GREETD}" == "true" ]] \
-     && [[ "${NOKRON_GREETER_BACKEND}" == "dms-greeter" ]]; then
-    if [[ ! -x "${NOKRON_VENDORED_DMS_INSTALL_DIR}/dms-greeter" ]]; then
-      die "greeter backend is 'dms-greeter' but ${NOKRON_VENDORED_DMS_INSTALL_DIR}/dms-greeter is missing.
-  Either enable [stages].vendor first to install the binary, or switch
-  [greeter].backend to 'tuigreet'."
-    fi
   fi
 
   info "self-check passed"

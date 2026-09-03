@@ -3,6 +3,7 @@
 # Idempotent: `dnf5 copr enable` is a no-op when the repo is already enabled.
 
 stage_copr() {
+  section "copr"
   command -v dnf5 >/dev/null 2>&1 || die "dnf5 not found — this installer targets Fedora."
 
   if [[ ${#NOKRON_COPRS[@]} -eq 0 ]]; then

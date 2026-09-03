@@ -24,6 +24,8 @@ stage_greetd() {
   fi
 
   local tmp; tmp="$(mktemp /etc/greetd/config.toml.XXXXXX)"
+  # Clean up temp file on any exit (error, interrupt, etc.)
+  trap 'rm -f '"${tmp}" EXIT
   case "${NOKRON_GREETER_BACKEND}" in
     tuigreet)
       cat > "${tmp}" <<'GREETD_EOF'
