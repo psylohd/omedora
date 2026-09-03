@@ -26,6 +26,7 @@
 # -u omitted: see lib/parser.sh for rationale.
 set -eo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 export NOKRON_REPO_ROOT="${SCRIPT_DIR}"
 
 # ── CLI parsing ───────────────────────────────────────────────────────────────
@@ -41,7 +42,6 @@ Usage: sudo ./install.sh [options]
 Options:
   --config PATH      use a non-default nokron.toml
   --dry-run          print what would happen, do nothing
-  --only stages      comma-separated list of stages to run (e.g. dnf,vendor)
   --skip stages      comma-separated list of stages to skip
   -h, --help         this help
 
@@ -59,10 +59,8 @@ while [[ $# -gt 0 ]]; do
     --only)     ONLY="$2"; shift 2 ;;
     --skip)     SKIP="$2"; shift 2 ;;
     -h|--help)  usage; exit 0 ;;
-    *)          echo "unknown arg: $1" >&2; usage; exit 2 ;;
   esac
 done
-
 # ── Load config + helpers ─────────────────────────────────────────────────────
 source "${SCRIPT_DIR}/lib/parser.sh"
 source "${SCRIPT_DIR}/lib/self-check.sh"

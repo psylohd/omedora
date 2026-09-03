@@ -22,18 +22,17 @@
 #   sudo ./tweaks.sh --diff <name>       # show what would change vs current state
 #   sudo ./tweaks.sh --revert <name>     # restore .bak.<date> backups for a tweak
 #
-# Backup convention: every config-deploy stage writes timestamped .bak
 # files alongside overwritten targets (see lib/parser.sh's backup_and_*).
 # `--revert <name>` restores the most recent .bak for every file that
 # stage <name> would have touched.
 set -eo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 export NOKRON_REPO_ROOT="${SCRIPT_DIR}"
 export NOKRON_CONFIG="${NOKRON_CONFIG:-${SCRIPT_DIR}/nokron.toml}"
 
 source "${SCRIPT_DIR}/lib/parser.sh"
 source "${SCRIPT_DIR}/lib/self-check.sh"
-
 load_config
 
 # ── Tweaks registry ──────────────────────────────────────────────────────────
