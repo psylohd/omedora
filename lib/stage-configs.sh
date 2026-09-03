@@ -70,11 +70,9 @@ stage_config_plymouth() {
 
 stage_config_tuigreet() {
   local src="${NOKRON_PATH_TUIGREET}"
-  local workdir
-
+  local workdir=""        # set by one of the branches below; init for set -u
   [[ -d "${src}" ]] || die "tuigreet theme dir not found: ${src}"
 
-  # ── 1. Get the Cargo workspace (clone fresh if no src path is set) ───────
   if [[ -n "${NOKRON_TUIGREET_REPO_URL}" ]]; then
     # New style: clone from a pinned git URL into a scratch dir, build, clean up.
     if [[ -z "${NOKRON_TUIGREET_BRANCH}" ]]; then
