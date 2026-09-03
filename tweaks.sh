@@ -26,10 +26,8 @@
 # files alongside overwritten targets (see lib/parser.sh's backup_and_*).
 # `--revert <name>` restores the most recent .bak for every file that
 # stage <name> would have touched.
+set -eo pipefail
 
-set -euo pipefail
-
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 export NOKRON_REPO_ROOT="${SCRIPT_DIR}"
 export NOKRON_CONFIG="${NOKRON_CONFIG:-${SCRIPT_DIR}/nokron.toml}"
 

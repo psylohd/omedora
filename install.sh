@@ -23,9 +23,9 @@
 # For surgical tweaks after a full install (re-apply one stage, etc.),
 # use ./tweaks.sh.
 
-set -euo pipefail
+# -u omitted: see lib/parser.sh for rationale.
+set -eo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 export NOKRON_REPO_ROOT="${SCRIPT_DIR}"
 
 # ── CLI parsing ───────────────────────────────────────────────────────────────

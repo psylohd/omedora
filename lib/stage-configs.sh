@@ -115,10 +115,13 @@ points to a non-Cargo directory. Either:
   fi
 
   # ── 2. Build ───────────────────────────────────────────────────────────────
-  # Register cleanup for the clone-scratch path. Only fires when we created
-  # a tempdir; legacy path leaves the user-owned workspace in place.
+  # Register cleanup for the clone-scratch path. The trap handler runs
+  # at function exit, after the local var has gone out of scope — so we
+  # promote the path to the environment (so the trap can still see it)
+  # and give the trap's expansion an explicit default.
   if [[ -n "${cleanup}" ]]; then
-    trap 'rm -rf "${cleanup}"' RETURN
+    export NOKRON_TUIGREET_CLEANUP="${cleanup}"
+    trap 'rm -rf "${NOKRON_TUIGREET_CLEANUP:-}"' RETURN
   fi
 
   [[ -n "${src_src}" && -f "${src_src}/Cargo.toml" ]] \

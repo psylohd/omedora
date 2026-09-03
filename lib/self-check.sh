@@ -15,7 +15,7 @@ self_check() {
   if ! grep -q '^ID=fedora' /etc/os-release 2>/dev/null; then
     warn "/etc/os-release does not advertise ID=fedora — continuing"
   fi
-  local version_id
+  local version_id=""
   version_id="$(. /etc/os-release && echo "${VERSION_ID:-}")"
   info "running on Fedora ${version_id:-unknown}"
 
@@ -24,13 +24,12 @@ self_check() {
     die "target_user '${NOKRON_TARGET_USER}' does not exist on this system.
   Create it first:  useradd -m ${NOKRON_TARGET_USER}"
   fi
-  local home
+  local home=""
   home="$(getent passwd "${NOKRON_TARGET_USER}" | cut -d: -f6)"
   if [[ ! -d "${home}" ]]; then
     die "home directory '${home}' does not exist for ${NOKRON_TARGET_USER}"
   fi
   info "target user: ${NOKRON_TARGET_USER} (home=${home})"
-  # 3. Plymouth hard dep: nokron theme uses ModuleName=script. If it's
   #    missing and the plymouth stage is enabled, install it now rather
   #    than aborting — much friendlier when running on a fresh server.
   if ! rpm -q plymouth-plugin-script >/dev/null 2>&1; then

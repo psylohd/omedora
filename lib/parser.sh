@@ -18,7 +18,12 @@
 #   NOKRON_DMS_PLUGINS=( list )
 #   NOKRON_SERVICES_ENABLE=( list )
 
-set -euo pipefail
+# `set -u` is intentionally NOT enabled — bash version differences between
+# the build host and other systems cause spurious "unbound variable" errors
+# on `local var` declarations without explicit init values. We rely on
+# `set -e` to catch real errors, and use explicit `${var:-default}` in
+# the few places where unset matters.
+set -eo pipefail
 
 # Resolve repo root from the location of this script's parent (lib/ lives
 # one level under repo root). fedora_install.sh sets NOKRON_REPO_ROOT
