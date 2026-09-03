@@ -151,36 +151,56 @@ stage_dms() {
          "${user_unit_dir}/graphical-session.target.wants/dms.service"; then
       die "failed to symlink dms.service into ${user_unit_dir}/graphical-session.target.wants/"
     fi
-    # Override dms.service: the upstream unit requires
-    # `Requisite=graphical-session.target` and uses `Type=dbus` claiming
-    # org.freedesktop.Notifications. On raw Hyprland (no GNOME session
-    # manager), graphical-session.target is never activated, so the
-    # upstream Requisite= fails and dms.service refuses to start. Drop
-    # the hard dependency; switch to `Type=simple` so systemd doesn't
-    # wait on a D-Bus name claim that may race with other notification
-    # daemons. dms still claims the bus name on its own.
-    local dropin_dir="${user_unit_dir}/dms.service.d"
-    install -d -m 0755 -o "${target_user}" -g "${target_user}" "${dropin_dir}"
-    cat > "${dropin_dir}/override.conf" <<'DMS_OVERRIDE_EOF'
-[Unit]
-# Upstream unit's Requisite=graphical-session.target never resolves on a
-# raw Hyprland session (no GNOME/KDE session manager activates it).
-# Keep dms.service startable regardless of which target fired the hook.
-Requisite=
-After=graphical-session.target hyprland-session.target
-
-[Service]
-# Upstream uses Type=dbus with BusName=org.freedesktop.Notifications.
-# That makes systemd wait for dms to claim the bus name before
-# considering the service "started". On a clean session without another
-# notification daemon this works, but if a future setup ships mako or
-# dunst, the name conflict aborts dms. Switch to simple and let dms
-# manage its own D-Bus lifecycle.
-Type=simple
-DMS_OVERRIDE_EOF
-    chown "${target_user}:${target_user}" "${dropin_dir}/override.conf"
-  fi
-  if [[ "$(loginctl show-user "${target_user}" 2>/dev/null | awk -F= '/^Linger=/{print $2}')" != "yes" ]]; then
+    # Override dms.service by COPYING it to ~/.config/systemd/user/.
+    # Local unit files take precedence over vendor units (no drop-in
+    # quirks — empty `Requisite=` doesn't always reset the directive
+    # across systemd versions, but a copied local unit always wins).
+    #
+    # Why we need to override:
+    #   1. Upstream has `Requisite=graphical-session.target`. Raw
+    #      Hyprland+greetd never activates that target (no GNOME/KDE
+    #      session manager running), so the Requisite= check fails and
+    #      systemd refuses to start dms.service.
+    #   2. Upstream uses `Type=dbus` with `BusName=org.freedesktop.Notifications`.
+    #      systemd waits for dms to claim the bus name before considering
+    #      it "started". If anything else (mako, dunst) ever claims it,
+    #      dms.service fails. Switch to `Type=simple` and let dms manage
+    #      its own D-Bus lifecycle.
+    #
+    # Stripped directives: Requisite= (entire line removed), Type=dbus
+    # → Type=simple. Everything else passes through unchanged.
+    local override_unit="${user_unit_dir}/dms.service"
+    if [[ ! -f "${override_unit}" ]] || \
+       ! grep -q '^# omedora: dms.service override$' "${override_unit}" 2>/dev/null; then
+      sed -e '/^Requisite=/d' \
+          -e 's/^Type=dbus$/Type=simple/' \
+          -e '1i # omedora: dms.service override (Requisite stripped, Type=simple)' \
+          -e 's|^Description=.*|Description=Dank Material Shell (DMS) [omedora override]|' \
+          "${service_src}" > "${override_unit}" \
+        || die "failed to write ${override_unit}"
+      chown "${target_user}:${target_user}" "${override_unit}"
+    fi
+    [[ -s "${override_unit}" ]] \
+      || die "${override_unit} is missing or empty after write"
+    # The upstream unit still has `WantedBy=graphical-session.target`,
+    # but that target is never active. Replace the [Install] block with
+    # one that wants `default.target` — which IS active for any logged-in
+    # user. dms will then auto-start on every login.
+    if grep -q '^WantedBy=graphical-session.target$' "${override_unit}"; then
+      sed -i 's|^WantedBy=graphical-session.target$|WantedBy=default.target|' \
+        "${override_unit}"
+    fi
+    # Drop the symlink so the override unit becomes the active one (no
+    # longer alias to the vendor copy). Symlink vs local-unit precedence:
+    # local unit in ~/.config/systemd/user/ always wins over the symlink
+    # target in /usr/lib/systemd/user/, so this is safe.
+    rm -f "${user_unit_dir}/graphical-session.target.wants/dms.service" 2>/dev/null || true
+    # `systemctl --user enable` writes the symlink for us; we already
+    # have a local unit, so `enable` is a no-op for the unit itself but
+    # still creates the default.target.wants/ symlink.
+    sudo -u "${target_user}" systemctl --user reenable "${override_unit##*/}" 2>/dev/null \
+      || warn "systemctl --user reenable dms.service failed (user can enable manually)"
+    info "dropped dms.service override (local unit, Type=simple, no Requisite)"
     if loginctl enable-linger "${target_user}" 2>/dev/null; then
       info "enabled lingering for ${target_user}"
     else
