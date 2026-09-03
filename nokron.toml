@@ -158,40 +158,61 @@ quickshell = "quickshell"         # → $HOME/.config/quickshell (dms wraps this
 
 # ── DankInstall (headless) ────────────────────────────────────────────────────
 # Drives the vendored upstream installer (lib/vendor/danklinux-install.sh)
-# in unattended mode. Every field here maps 1:1 to a `dankinstall` CLI flag
-# (verified against core/cmd/dankinstall/main.go on master — see commit
-# history for the exact validation rules in core/internal/headless/runner.go).
+# in unattended mode. The wrapper downloads the **latest GitHub release**
+# of `dankinstall` (currently v1.5.3), so this section's flag set must
+# match what the latest release accepts — not what's on master HEAD
+# (which has unreleased flags like --privesc and --dms-greeter that
+# produce "unknown flag" errors when passed to the released binary).
+#
+# Supported by the released v1.5.3 binary (core/cmd/dankinstall/main.go
+# at the v1.5.3 tag):
+#
+#   -c / --compositor    hyprland | niri | mango
+#   -t / --term          ghostty | kitty | alacritty
+#   -y / --yes           required for headless mode
+#   --include-deps       list of optional deps to enable (e.g. dms-greeter)
+#   --exclude-deps       list of deps to skip
+#   --replace-configs    list of configs to overwrite (each is a separate
+#                        flag invocation; pflag StringSliceVar, NOT a
+#                        comma-separated single value)
+#   --replace-configs-all
+#   --danksearch         install danksearch + enable user service
+#   --dankcalendar       install dankcalendar
+#
+# NOT in the released v1.5.3 binary (added on master after v1.5.3):
+#   --privesc, --dms-greeter, --all-features, --git, --git-deps
 #
 # Notes on flag shapes:
-#   - `compositor` and `terminal` are scalars. Valid values for compositor:
-#     "niri" | "hyprland" | "mango". For terminal: "ghostty" | "kitty" |
-#     "alacritty". Anything else makes the runner die with a clear error.
-#   - `replace_configs` is a TOML list. Each element is emitted as its own
-#     --replace-configs <name> flag (pflag StringSliceVar — do NOT pass as a
-#     comma-separated string). Valid values: niri | hyprland | ghostty |
-#     kitty | alacritty. Pass --replace-configs-all to replace everything.
-#   - `exclude_deps` is a TOML list, also emitted as repeated flags.
-#   - `danksearch` / `dankcalendar` / `dms_greeter` are dedicated bool
-#     flags on the binary. There is also a generic --include-deps but the
-#     dedicated flags are cleaner and resolved earlier by the runner.
-#   - `yes` (with -y short form) is REQUIRED for headless mode — without
-#     it the runner prints a plan and aborts with ErrConfirmationRequired.
-#   - `privesc` is "sudo" | "doas" | "run0" | "" (autodetect). The runner
-#     aborts if no cached credentials are available, so run `sudo -v` first.
+#   - `replace_configs` and `exclude_deps` are TOML lists. Each element is
+#     emitted as its own --flag <value> invocation. The bash `${arr[*]}`
+#     form would join with spaces and produce a single string with an
+#     embedded space, which pflag treats as one value — the runner then
+#     errors with "unknown config 'hyprland ghostty'". The stage script
+#     iterates and emits the repeated-flag form.
+#   - `dms-greeter` is an optional dep, off by default. We use
+#     `exclude_deps = ["dms-greeter"]` to be explicit. (Dedicated
+#     --dms-greeter exists on master but not in v1.5.3.)
+#   - `--yes` is required for headless mode — without it the runner prints
+#     a plan and aborts with ErrConfirmationRequired.
+#   - The runner autodetects the privilege-escalation tool (sudo / doas /
+#     run0). Make sure `target_user` either has passwordless sudo OR
+#     you've cached their credentials with `sudo -u <user> sudo -v` before
+#     running install.sh. The runner aborts cleanly with a clear message
+#     if no cached credentials are available.
 [dankinstall]
 compositor      = "hyprland"          # -c: hyprland | niri | mango
 terminal        = "ghostty"           # -t: ghostty | kitty | alacritty
 replace_configs = ["hyprland", "ghostty"]
-exclude_deps    = ["dms-greeter"]
+exclude_deps    = ["dms-greeter"]     # not in v1.5.3's flag set as a
+                                       # dedicated bool; we use the
+                                       # generic --exclude-deps which
+                                       # works in both v1.5.3 and master
 danksearch      = true                # install danksearch binary + service
 dankcalendar    = true                # install dankcalendar binary
-dms_greeter     = false               # explicit: do NOT install dms-greeter
 yes             = true                # -y: required for headless mode
-privesc         = "sudo"              # sudo | doas | run0 | "" (autodetect)
+
 # ── Greeter ───────────────────────────────────────────────────────────────────
 # backend = "tuigreet"     — current Rust build under [vendored.tuigreet]
-# backend = "dms-greeter"  — vendored binary (not currently shipped)
-#
 # The exact command + user are hardcoded in lib/stage-greetd.sh so the
 # installed greetd config matches what the Hyprland RPM expects to launch
 # (i.e. /usr/bin/start-hyprland, which the RPM ships). If you ever want

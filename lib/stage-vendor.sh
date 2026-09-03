@@ -9,10 +9,11 @@
 #
 # The downloaded `dankinstall` binary accepts a headless mode that requires
 # both `--compositor` and `--term` plus `--yes`. We forward every relevant
-# field from [dankinstall] in nokron.toml — flag semantics are taken from
-# the upstream source:
-#   - core/cmd/dankinstall/main.go        (cobra flag definitions)
-#   - core/internal/headless/runner.go    (validation + per-dep logic)
+# field from [dankinstall] in nokron.toml — flag semantics verified against
+# the **latest released** tag (v1.5.3 at the time of writing), not master
+# HEAD. master has unreleased flags like `--privesc` and `--dms-greeter`
+# that the released binary rejects with "unknown flag". Re-verify against
+# the latest tag whenever [vendored.dms] drifts.
 #
 # Critical pflag gotcha: --replace-configs and --exclude-deps are
 # StringSliceVar. They accept BOTH `--flag a,b` (comma list) and
@@ -26,7 +27,9 @@
 # The upstream installer refuses to run as root. We drop to target_user
 # via `sudo -u` and export `DMS_PRIVESC=sudo` so subsequent dms subcommands
 # (e.g. `dms greeter install`) don't pause to ask which privilege tool to
-# use. `dankinstall` itself takes its own `--privesc sudo` flag.
+# use. The dankinstall binary itself autodetects sudo/doas/run0 from
+# what's installed on the system (the released v1.5.3 has no --privesc
+# flag; the runner's privesc autodetect handles this).
 
 stage_vendor() {
   local script_rel="${NOKRON_VENDORED_DMS_INSTALL_SCRIPT}"
@@ -51,18 +54,12 @@ stage_vendor() {
   if [[ "${NOKRON_DANKINSTALL_YES:-true}" == "true" ]]; then
     flags+=( -y )
   fi
-  if [[ -n "${NOKRON_DANKINSTALL_PRIVESC}" ]]; then
-    flags+=( --privesc "${NOKRON_DANKINSTALL_PRIVESC}" )
-  fi
 
-  # Dedicated bool flags. These resolve BEFORE --include-deps in the
-  # runner, which is the form we want — explicit opt-in beats generic.
+  # Dedicated bool flags in v1.5.3: --danksearch, --dankcalendar.
+  # (--dms-greeter exists on master HEAD but not in v1.5.3; we use the
+  # generic --exclude-deps "dms-greeter" instead, which works in both.)
   [[ "${NOKRON_DANKINSTALL_DANKSEARCH:-false}"   == "true" ]] && flags+=( --danksearch )
   [[ "${NOKRON_DANKINSTALL_DANKCALENDAR:-false}" == "true" ]] && flags+=( --dankcalendar )
-  # dms-greeter is opt-out by default; the dedicated flag opts back in.
-  # We expose the toml as `dms_greeter = true/false` for symmetry with the
-  # other two and forward --dms-greeter only when true.
-  [[ "${NOKRON_DANKINSTALL_DMS_GREETER:-false}"  == "true" ]] && flags+=( --dms-greeter )
 
   # StringSliceVar: emit each element as its own --replace-configs flag.
   # pflag accepts comma-lists too, but the repeated-flag form is what the
@@ -74,39 +71,57 @@ stage_vendor() {
     done
   fi
 
-  # Same for --exclude-deps.
+  # Same for --exclude-deps and --include-deps.
   if [[ ${#NOKRON_DANKINSTALL_EXCLUDE_DEPS[@]} -gt 0 ]]; then
     for dep in "${NOKRON_DANKINSTALL_EXCLUDE_DEPS[@]}"; do
       flags+=( --exclude-deps "${dep}" )
     done
   fi
+  if [[ ${#NOKRON_DANKINSTALL_INCLUDE_DEPS[@]} -gt 0 ]]; then
+    for dep in "${NOKRON_DANKINSTALL_INCLUDE_DEPS[@]}"; do
+      flags+=( --include-deps "${dep}" )
+    done
+  fi
 
   info "dankinstall flags: ${flags[*]}"
 
-  # ── Sudo credential cache ───────────────────────────────────────────────
-  # The runner's resolveSudoPassword() aborts with a clear error if no
-  # cached credentials are available, even when --privesc is set. Cache
-  # them now so the install is truly unattended. `sudo -v` is a no-op if
-  # the cache is already fresh.
-  info "priming sudo credential cache"
-  sudo -v || die "sudo -v failed — installer needs cached sudo credentials"
-
   # ── Run the installer as the desktop user ──────────────────────────────
-  if [[ "${NOKRON_VENDORED_DMS_RUN_AS_USER}" == "true" ]]; then
+  if [[ "${NOKRON_VENDORED_DMS_RUN_AS_USER}" != "true" ]]; then
+    warn "run_as_user=false — installer will likely refuse (it requires non-root)"
+    DMS_PRIVESC=sudo "${script}" "${flags[@]}" \
+      || die "dms installer failed — see output above"
+  else
     if ! id "${NOKRON_TARGET_USER}" >/dev/null 2>&1; then
       die "run_as_user=true but target_user '${NOKRON_TARGET_USER}' does not exist"
     fi
+
+    # ── Sudo credential cache for the target user ──────────────────────
+    # The runner autodetects the priv-esc tool (sudo/doas/run0) and then
+    # calls `privesc.CheckCached()` which runs `sudo -n true` non-interactively
+    # under the target user's identity. If the target user doesn't have a
+    # cached sudo credential AND doesn't have passwordless sudo, the
+    # runner aborts mid-install with a clear error.
+    #
+    # `sudo -v` as the target user primes their cache. If the target user
+    # has passwordless sudo in /etc/sudoers, this is instant. Otherwise
+    # we have to fall back to a password prompt — which is interactive
+    # and defeats "no user interaction". Detect that case and warn.
+    info "priming sudo credential cache for ${NOKRON_TARGET_USER}"
+    if ! sudo -u "${NOKRON_TARGET_USER}" sudo -n true 2>/dev/null; then
+      warn "${NOKRON_TARGET_USER} does not have passwordless sudo"
+      warn "you'll be prompted for their password during the install"
+      warn "or run: sudo -u ${NOKRON_TARGET_USER} sudo -v  (then re-run this stage)"
+    fi
+
     info "running installer as ${NOKRON_TARGET_USER} (script refuses root)"
-    # DMS_PRIVESC=sudo pins dms's own priv-esc tool detection. The
-    # vendored script itself spawns the downloaded installer with the
-    # flags we pass — its --privesc is a separate concern (handled above).
+    # DMS_PRIVESC=sudo pins dms's own priv-esc tool detection for any
+    # dms subcommands spawned after the installer (e.g. `dms greeter
+    # install`). The vendored script itself spawns the downloaded
+    # installer with the flags we pass — its privesc is autodetected
+    # by the runner from whatever's on the system.
     sudo -u "${NOKRON_TARGET_USER}" -H \
       env DMS_PRIVESC=sudo \
       "${script}" "${flags[@]}" \
-      || die "dms installer failed — see output above"
-  else
-    warn "run_as_user=false — installer will likely refuse (it requires non-root)"
-    DMS_PRIVESC=sudo "${script}" "${flags[@]}" \
       || die "dms installer failed — see output above"
   fi
 

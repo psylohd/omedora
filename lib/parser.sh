@@ -126,19 +126,19 @@ emit("NOKRON_DMS_PLUGINS", dp.get("plugins", []))
 emit("NOKRON_DMS_REGISTRY", dp.get("registry", []))
 
 # dankinstall (headless mode for the vendored upstream installer).
-# Flag semantics are defined in core/cmd/dankinstall/main.go and the
-# runner logic in core/internal/headless/runner.go on master.
+# Flag semantics verified against core/cmd/dankinstall/main.go at the
+# latest released tag (v1.5.3) — NOT against master HEAD, which has
+# unreleased flags that produce "unknown flag" errors when passed to
+# the released binary. Re-verify when bumping the [vendored.dms] pin.
 di = cfg.get("dankinstall", {})
-emit("NOKRON_DANKINSTALL_COMPOSITOR",     di.get("compositor", "hyprland"))
-emit("NOKRON_DANKINSTALL_TERMINAL",       di.get("terminal",   "ghostty"))
+emit("NOKRON_DANKINSTALL_COMPOSITOR",      di.get("compositor", "hyprland"))
+emit("NOKRON_DANKINSTALL_TERMINAL",        di.get("terminal",   "ghostty"))
 emit("NOKRON_DANKINSTALL_REPLACE_CONFIGS", di.get("replace_configs", []))
 emit("NOKRON_DANKINSTALL_EXCLUDE_DEPS",    di.get("exclude_deps", []))
-emit("NOKRON_DANKINSTALL_DANKSEARCH",      str(bool(di.get("danksearch", False))).lower())
+emit("NOKRON_DANKINSTALL_DANKSEARCH",      str(bool(di.get("danksearch",   False))).lower())
 emit("NOKRON_DANKINSTALL_DANKCALENDAR",    str(bool(di.get("dankcalendar", False))).lower())
-emit("NOKRON_DANKINSTALL_DMS_GREETER",     str(bool(di.get("dms_greeter", False))).lower())
-emit("NOKRON_DANKINSTALL_YES",             str(bool(di.get("yes", True))).lower())
-emit("NOKRON_DANKINSTALL_PRIVESC",         di.get("privesc", ""))
-# services
+emit("NOKRON_DANKINSTALL_YES",             str(bool(di.get("yes",          True))).lower())
+emit("NOKRON_DANKINSTALL_INCLUDE_DEPS",    di.get("include_deps", []))
 svc = cfg.get("services", {})
 emit("NOKRON_SERVICES_ENABLE", svc.get("enable", []))
 emit("NOKRON_SERVICES_DEFAULT", svc.get("set_default", "graphical.target"))
