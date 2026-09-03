@@ -36,11 +36,21 @@ stage_greetd() {
 vt = 1
 
 [default_session]
-# greetd's RPM ships a 'greetd' system user (uid auto, home /var/lib/greetd,
-# shell /usr/sbin/nologin). It owns the session pre-auth; tuigreet/dms-greeter
-# then exec the chosen user's Hyprland session.
-command = "sh -c '. /etc/tuigreet/palette.sh; exec tuigreet --cmd /usr/local/bin/start-hyprland'"
-user = "greetd"
+# We don't add env exports here on purpose — Hyprland's startup.lua applies
+# them to its child processes (dms shell, kitty, etc.) before exec-once
+# fires `dms run`. Inlining them in the greetd command would require
+# extra wrappers and complicate `start-hyprland` resolution.
+#
+# `command` chains `||` to /usr/bin/start-hyprland (Hyprland RPM wrapper,
+# always present) so even if our /usr/local/bin/start-hyprland env-exports
+# launcher failed to install, login still works (just without env exports
+# — dms may need a manual relaunch in that case).
+command = "sh -c '. /etc/tuigreet/palette.sh; exec tuigreet --cmd /usr/local/bin/start-hyprland || exec tuigreet --cmd /usr/bin/start-hyprland'"
+# Use `greeter` user (uid 981, /usr/bin/nologin shell is fine — exec_cmd
+# bypasses the login shell). The dms-greeter user creation pattern uses
+# `greeter`; the greetd RPM's `greetd` user has /usr/sbin/nologin and
+# is reserved for the daemon itself, not sessions.
+user = "greeter"
 GREETD_EOF
       ;;
     dms-greeter)
@@ -49,16 +59,16 @@ GREETD_EOF
 vt = 1
 
 [default_session]
-command = "dms-greeter --command /usr/local/bin/start-hyprland"
-user = "greetd"
+command = "dms-greeter --command /usr/local/bin/start-hyprland || dms-greeter --command /usr/bin/start-hyprland"
+user = "greeter"
 GREETD_EOF
       ;;
     *)
       die "unknown greeter backend: ${NOKRON_GREETER_BACKEND}"
+      ;;
   esac
 
   install -m 0644 "${tmp}" "${cfg}"
-  rm -f "${tmp}"
 
   info "wrote ${cfg}"
 }
