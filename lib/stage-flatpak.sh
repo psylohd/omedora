@@ -22,7 +22,9 @@ stage_flatpak() {
 
   if [[ ${#NOKRON_FLATPAK_SYSTEM[@]} -gt 0 ]]; then
     info "installing ${#NOKRON_FLATPAK_SYSTEM[@]} system Flatpak(s)"
-    flatpak install -y --system --noninteractive flathub "${NOKRON_FLATPAK_SYSTEM[@]}" \
+    # --or-update: install if missing, update if already installed.
+    # positional app-id after remote name (not --flag app-id).
+    flatpak install -y --system flathub --or-update "${NOKRON_FLATPAK_SYSTEM[@]}" \
       || warn "system Flatpak install had failures (continuing)"
   fi
 
@@ -33,11 +35,8 @@ stage_flatpak() {
     info "installing ${#NOKRON_FLATPAK_USER[@]} user Flatpak(s) as ${NOKRON_TARGET_USER}"
     # `sudo -u foo` without -H keeps $HOME=root's, which would land the
     # install in /root/.local/share/flatpak. Set HOME explicitly so
-    # `flatpak --user` writes to the target user's flatpak dir.
-    local user_home
-    user_home="$(getent passwd "${NOKRON_TARGET_USER}" | cut -d: -f6)"
     sudo -u "${NOKRON_TARGET_USER}" env HOME="${user_home}" \
-      flatpak install -y --user --noninteractive flathub "${NOKRON_FLATPAK_USER[@]}" \
+      flatpak install -y --user flathub --or-update "${NOKRON_FLATPAK_USER[@]}" \
       || warn "user Flatpak install had failures (continuing)"
   fi
 }

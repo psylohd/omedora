@@ -31,43 +31,6 @@ self_check() {
   fi
   info "target user: ${NOKRON_TARGET_USER} (home=${home})"
 
-  # 2b. Passwordless sudo for target_user. The vendored dms installer
-  # (dankinstall) runs as target_user but needs root for dnf/copr/systemctl.
-  # Its `privesc.CheckCached()` (which runs `sudo -n true`) aborts cleanly
-  # if target_user lacks cached credentials. Stock Fedora Server doesn't
-  # give created users NOPASSWD sudo, so we drop a sudoers file here
-  # (idempotent, validated with `visudo -c` before install) to make the
-  # install actually unattended. Opt out via [sudo].passwordless = false
-  # in nokron.toml; clean up by deleting the file (documented inline).
-  if [[ "${NOKRON_SUDO_PASSWORDLESS:-true}" == "true" ]]; then
-    local sudoers_file="/etc/sudoers.d/99-nokron-${NOKRON_TARGET_USER}"
-    # Skip if target_user already has any NOPASSWD sudo rule — don't
-    # clobber an existing setup (e.g. they're in %wheel with NOPASSWD).
-    if sudo -l -U "${NOKRON_TARGET_USER}" 2>/dev/null \
-         | grep -qE 'NOPASSWD:[[:space:]]*ALL'; then
-      info "target_user already has NOPASSWD sudo — not adding ours"
-    elif [[ -f "${sudoers_file}" ]]; then
-      info "${sudoers_file} already present — not overwriting"
-    else
-      info "granting NOPASSWD sudo to ${NOKRON_TARGET_USER}"
-      # Use a sudoers.d drop-in (parses cleanly, easy to remove) with
-      # the same content visudo would accept. `visudo -c -f` validates
-      # the file before we leave it on disk, so a syntax error won't
-      # lock out the system.
-      printf '%s ALL=(ALL) NOPASSWD: ALL\n' "${NOKRON_TARGET_USER}" \
-        > "${sudoers_file}".tmp
-      chmod 0440 "${sudoers_file}".tmp
-      if ! visudo -c -f "${sudoers_file}".tmp >/dev/null; then
-        rm -f "${sudoers_file}".tmp
-        die "visudo rejected the proposed sudoers file; refusing to write ${sudoers_file}"
-      fi
-      install -m 0440 "${sudoers_file}".tmp "${sudoers_file}"
-      rm -f "${sudoers_file}".tmp
-      info "wrote ${sudoers_file} (remove with: sudo rm ${sudoers_file})"
-    fi
-  else
-    info "[sudo].passwordless=false — not granting NOPASSWD; ensure target_user's cache is primed"
-  fi
 
   # 3. Plymouth script plugin. If plymouth is missing the script-plugin is
   #    missing and the plymouth stage is enabled, install it now rather

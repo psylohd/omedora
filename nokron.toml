@@ -18,16 +18,7 @@ name        = "nokron"
 description = "Minimal Fedora + Hyprland + dms + curated apps"
 target_user = ""                  # REQUIRED: set to the desktop user account.
 
-# The install script runs as root and configures the system. No privileged
-# operations are needed at runtime after install.sh completes — the target
-# user's systemd session handles dms and other user services.
-#
-# To clean up after the install:  rm /etc/sudoers.d/99-nokron-<user>
-[sudo]
-passwordless = true   # drop a NOPASSWD sudoers file for target_user
-
-
-# ── Repositories ──────────────────────────────────────────────────────────────
+# ── Repositories
 [coprs]
 enable = [
   "avengemedia/danklinux",        # quickshell-git, matugen, cliphist, danksearch, dgop, ghostty

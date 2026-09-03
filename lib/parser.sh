@@ -69,10 +69,6 @@ meta = cfg.get("meta", {})
 emit("NOKRON_TARGET_USER", meta.get("target_user", ""))
 emit("NOKRON_META_NAME", meta.get("name", "nokron"))
 emit("NOKRON_META_DESCRIPTION", meta.get("description", ""))
-
-# sudo
-sudo_cfg = cfg.get("sudo", {})
-emit("NOKRON_SUDO_PASSWORDLESS", str(bool(sudo_cfg.get("passwordless", True))).lower())
 coprs = cfg.get("coprs", {}).get("enable", [])
 emit("NOKRON_COPRS", coprs)
 
