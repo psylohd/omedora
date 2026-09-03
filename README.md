@@ -1,24 +1,26 @@
+
 # omedora
 
-Personal postinstall script for **Fedora Server + Hyprland + dms + Plymouth + tuigreet**.
+**_omarchy without the DHH. ✨ And on fedora ✨_**
 
-> **This is a personal-use script. Largely Vibecoded. Not for distribution.**
-> I built it because I wanted a single declarative config file (`omedora.toml`)
-> that maps to the handful of files I actually need to keep in sync across
-> reinstalls. There is no ISO, no Fedora Spin, no `bootc` image, no
-> signature verification, no hardening. If something breaks, I fix it for
-> myself.
-> 
-> I don't really expect anyone else to use this.
->
-> Clone it, fork it, copy bits. Don't expect issues to be triaged.
+> **This is a personal-use post install script. Largely Vibecoded. Not for distribution.**
+> Also depends on some fedora coprs, so there's some risk here. Slightly better than `curl | sh` but still of note.
+> Probably don't use this.  ¯\\_(ツ)_/¯
+> Clone it, fork it, twist it, bop it! I don't care
 
----
-## But Whyyy?
+## But Whyyyy? This seems like a waste of time.
 
-I recently tried omarchy and really liked hyprland. I didn't like the bloatware, the terrible security, and a lot of choices DHH made. And I don't really want to use a system with packages maintained by vibecoders. Now that I've been converted from pretty but clunky gnome, I wanted to build my dream desktop. And I like fedora. 
+It is. But I think it's a fun waste of time.
 
----
+I recently tried omarchy and **really** liked hyprland. I didn't like the bloatware, the terrible security, and a lot of choices DHH made. And I don't really want to use a system with packages maintained by vibecoders. Sounds like a nightmare. 
+
+I also couldn't find a decent hypraland fedora spin online. And the last thing I wanted is to use a random fedora-based distro. Eew
+
+Now that I've been converted from pretty but clunky gnome, I wanted to build my dream desktop.
+
+btw, I don't use arch
+
+
 
 ## What's here
 
@@ -34,33 +36,30 @@ plymouth/         Plymouth omedora theme (script module)
 tuigreet/         tuigreet theme + palette.sh + brand.txt
 ```
 The vendored dms binaries and the tuigreet Cargo workspace are NOT in the
-repo. The installer downloads dms from the internet (no sha256 check —
-see the warning above) and clones tuigreet from
-`https://github.com/psylohd/tuigreet.git` at install time.
+repo. The installer clones tuigreet from
+`https://github.com/psylohd/tuigreet.git` and builds at install time.
 
----
 
-## Quick start
 
-# 0. Install Fedora Server (DVD ISO, minimal layout, no DE).
-#    Verify the ISO sha256 against the published CHECKSUM before booting.
+# Quick start
 
-# 1. Clone + edit config
-git clone https://github.com/psylohd/omedora.git
-cd omedora
+## 0. Install Fedora Everything Server Image
+Make sure Common NetworkManager Submodules and Standard are selected in software selection
+ 
+## 1. Clone + edit config
 
-# 2. Run
-sudo ./install.sh --dry-run # preview
-sudo ./install.sh           # go
+    sudo dnf install git -y
+    git clone https://github.com/psylohd/omedora.git
+    cd omedora
 
-# 3. Reboot. You should see Plymouth → tuigreet → Hyprland → dms.
-systemctl reboot
-```
+## 2. Run
 
-Re-runs are idempotent: every overwritten file gets a timestamped `.bak.<date>`
-backup.
+     sudo ./install.sh
 
----
+## 3. Reboot. You should see Plymouth → tuigreet → Hyprland → dms.
+Profit!
+
+
 
 ## `install.sh` vs `tweaks.sh`
 
@@ -83,58 +82,16 @@ sudo ./tweaks.sh --revert dms     # restore .bak files
 Available tweaks: `plymouth`, `tuigreet`, `greetd`, `hyprland`, `quickshell`,
 `dms`, `services`.
 
----
-
-## Stages (toggle in omedora.toml `[stages]`)
-
-Default order: `copr → dnf → vendor → flatpak → greetd → plymouth → tuigreet → hyprland → quickshell → dms → services`.
-
-```toml
-[stages]
-copr       = true   # enable lionheartp/Hyprland + a couple of small COPRs
-dnf        = true   # install Hyprland stack + quickshell + apps + rust/cargo
-vendor     = true   # download dms + dgop from AvengeMedia/DankMaterialShell
-flatpak    = true   # add Flathub, install zen-browser
-greetd     = true   # write /etc/greetd/config.toml + /usr/local/bin/start-hyprland
-plymouth   = true   # drop Plymouth theme, run dracut -f
-tuigreet   = true   # clone + build tuigreet from your fork, install binary
-hyprland   = true   # deploy hyprland/ → ~/.config/hypr/
-quickshell = true   # deploy quickshell/ → ~/.config/quickshell/
-dms        = true   # deploy DankMaterialShell/ + install plugins from [dms_plugins]
-services   = true   # systemctl enable greetd; set-default graphical.target
-```
-
-CLI overrides:
-
-```sh
-sudo ./install.sh --only dnf,vendor
-sudo ./install.sh --skip flatpak
-```
-
----
-
 ## What this does NOT do
 
-- No ISO, no bootc / atomic / rpm-ostree. Plain mutable Fedora Server.
-- No signature verification on dms downloads.
-- No NVIDIA-specific Plymouth / driver config.
 - No GNOME desktop — just Nautilus, Disks, Loupe, Text Editor (the apps).
-- No `dms-greeter` (we use `tuigreet` as the login greeter).
+- No `dms-greeter` (I use a custom `tuigreet` as the login greeter).
+- No "agentic os" bs. No weird non-standard tmux bindings. 
+- Provide a beginner-friendly installation for new linux users.
+- Raise 10M in funding lol
 
----
-
-## Bumping dms
-
-```sh
-# 1. Update [vendored.dms].version in omedora.toml.
-# 2. (Optional) sanity-check the new release at
-#    https://github.com/AvengeMedia/DankMaterialShell/releases
-# 3. Refresh:
-sudo ./install.sh --only vendor
-```
-
----
-
-## License
-
-YOLO
+## License: YOLO
+Do whatever you want with this.
+If it breaks then soz, but it's ur fault - u looked at it funny.
+No warranty. No refunds. No blaming me.
+I did not make you use this.
