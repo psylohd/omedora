@@ -123,9 +123,24 @@ hl.window_rule({ match = { class = "^(zoom)$" }, float = true })
 hl.layer_rule({ match = { namespace = "^(quickshell)$" }, no_anim = true })
 hl.layer_rule({ match = { namespace = "^dms:.*" }, no_anim = true })
 
-require("dms.colors")
-require("dms.outputs")
-require("dms.layout")
-require("dms.cursor")
+-- DMS-generated files (colors, outputs, layout) are written by dms on
+-- first launch. Until then they don't exist, and requiring them here
+-- would crash Hyprland before exec-once dms run has a chance. Wrap each
+-- dms-generated require in pcall so Hyprland boots cleanly even on a
+-- fresh install where dms hasn't run yet. dms/binds.lua and
+-- dms/binds-user.lua ARE shipped in the repo (binds is the upstream
+-- default, binds-user is our override), so those require normally.
+local function safe_require(mod)
+	local ok, err = pcall(require, mod)
+	if not ok then
+		-- Will be picked up on the next hyprctl reload, once dms has
+		-- written the file from its first-launch theme/monitor logic.
+		print(string.format("[hyprland] deferring require(\"%s\"): %s", mod, err))
+	end
+end
+safe_require("dms.colors")
+safe_require("dms.outputs")
+safe_require("dms.layout")
+safe_require("dms.cursor")
 require("dms.binds")
 require("dms.binds-user")
