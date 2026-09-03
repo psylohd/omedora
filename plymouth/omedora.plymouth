@@ -1,0 +1,11 @@
+[Plymouth Theme]
+Name=Omedora
+Description=ASCII-style FEDORA wordmark on Fedora-blue background, Plymouth spin/script hybrid.
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/omedora
+ScriptFile=/usr/share/plymouth/themes/omedora/omedora.script
+ConsoleLogBackgroundColor=0x0b3d91
+MonospaceFont=Cantarell 11
+Font=Cantarell 11
