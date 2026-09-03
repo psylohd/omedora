@@ -73,9 +73,6 @@ emit("NOKRON_META_DESCRIPTION", meta.get("description", ""))
 coprs = cfg.get("coprs", {}).get("enable", [])
 emit("NOKRON_COPRS", coprs)
 
-# third-party RPM repos (non-COPR, installed via bootstrap `dnf install`)
-terra = cfg.get("repos", {}).get("terra", {})
-emit("NOKRON_TERRA_ENABLE", str(bool(terra.get("enable", False))).lower())
 # packages
 pkgs = cfg.get("packages", {})
 emit("NOKRON_HYPRLAND", pkgs.get("hyprland", {}).get("core", []))

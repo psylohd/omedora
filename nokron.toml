@@ -24,18 +24,8 @@ enable = [
   "lionheartp/Hyprland",          # the Hyprland stack on Fedora 43/44/45
   "leloubil/wl-clip-persist",     # Wayland clipboard persistence
   "tofik/nwg-shell",              # nwg-look + nwg-displays
+  "scottames/ghostty",            # ghostty (not in Fedora's default repos)
 ]
-
-# ── Third-party RPM repos (non-COPR) ──────────────────────────────────────────
-# Repos that are installed via a bootstrap `dnf install` (with --nogpgcheck
-# the first time, since the GPG key isn't trusted yet) rather than the
-# `dnf5 copr enable` mechanism. Keep the [coprs] section for COPRs only.
-[repos.terra]
-# https://developer.fyralabs.com/terra/installing — rolling-release Fedora
-# repo. Provides ghostty (the terminal in [dankinstall].terminal) and a
-# wide variety of other packages not in Fedora's default repos.
-enable = true
-
 # ── Packages ──────────────────────────────────────────────────────────────────
 [packages.hyprland]
 # All from lionheartp/Hyprland COPR (must be enabled first).
