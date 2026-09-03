@@ -11,6 +11,7 @@
 #   NOKRON_QUICKSHELL=( list )
 #   NOKRON_APPS=( list )
 #   NOKRON_APPS_OPTIONAL=( list )
+#   NOKRON_DMS_WEAK_DEPS
 #   NOKRON_TARGET_USER
 #   NOKRON_COPRS=( list )
 #   NOKRON_PATH_PLYMOUTH, NOKRON_PATH_TUIGREET, NOKRON_PATH_TUIGREET_SRC
@@ -69,8 +70,7 @@ emit("NOKRON_TARGET_USER", meta.get("target_user", ""))
 emit("NOKRON_META_NAME", meta.get("name", "nokron"))
 emit("NOKRON_META_DESCRIPTION", meta.get("description", ""))
 
-# sudo: auto-configure NOPASSWD for target_user so the vendor stage
-# (dankinstall running as target_user) can call `sudo -n true` etc.
+# sudo
 sudo_cfg = cfg.get("sudo", {})
 emit("NOKRON_SUDO_PASSWORDLESS", str(bool(sudo_cfg.get("passwordless", True))).lower())
 coprs = cfg.get("coprs", {}).get("enable", [])
@@ -85,29 +85,25 @@ apps = pkgs.get("apps", {})
 emit("NOKRON_APPS", apps.get("required", []))
 emit("NOKRON_APPS_OPTIONAL", apps.get("optional_copr", []))
 
-# vendored (dms install script + tuigreet source)
-v = cfg.get("vendored", {})
-vdms = v.get("dms", {})
-emit("NOKRON_VENDORED_DMS_INSTALL_SCRIPT", vdms.get("install_script", ""))
-emit("NOKRON_VENDORED_DMS_RUN_AS_USER", str(bool(vdms.get("run_as_user", False))).lower())
-# Dropped: NOKRON_VENDORED_DMS_VERSION, NOKRON_VENDORED_DMS_BASE_URL,
-# NOKRON_VENDORED_DMS_BINS, NOKRON_VENDORED_DMS_INSTALL_DIR,
-# NOKRON_VENDORED_DMS_*, NOKRON_VENDORED_DMS_SHA256__*. The vendor stage
-# now runs the upstream installer script (lib/vendor/danklinux-install.sh),
-# which handles version discovery + download + sha256 internally.
-vtg = v.get("tuigreet", {})
-emit("NOKRON_TUIGREET_REPO_URL", vtg.get("repo_url", ""))
-emit("NOKRON_TUIGREET_BRANCH", vtg.get("branch", ""))
-emit("NOKRON_TUIGREET_COMMIT", vtg.get("commit", ""))
+# dms from COPR (avengemedia/dms + avengemedia/danklinux)
+dms_cfg = cfg.get("packages", {}).get("dms", {})
+emit("NOKRON_DMS_WEAK_DEPS", str(bool(dms_cfg.get("install_weak_deps", True))).lower())
+
+# vendored tuigreet (build from source) — under [paths.repo]
+vtg_cfg = cfg.get("paths", {}).get("repo", {})
+emit("NOKRON_TUIGREET_REPO_URL",  vtg_cfg.get("vendored_tuigreet_repo_url", ""))
+emit("NOKRON_TUIGREET_BRANCH",    vtg_cfg.get("vendored_tuigreet_branch", ""))
+emit("NOKRON_TUIGREET_COMMIT",    vtg_cfg.get("vendored_tuigreet_commit", ""))
+
 # flatpak
 fp = cfg.get("flatpak", {})
 emit("NOKRON_FLATPAK_SYSTEM", fp.get("system", []))
 emit("NOKRON_FLATPAK_USER", fp.get("user", []))
+
 # greeter
 g = cfg.get("greeter", {})
 emit("NOKRON_GREETER_BACKEND", g.get("backend", "tuigreet"))
-# NOKRON_GREETER_SESSION removed — the greetd config hardcodes the path
-# (always /usr/bin/start-hyprland, the Hyprland RPM wrapper).
+
 # paths
 def repo_abs(rel):
     if not rel:
@@ -128,20 +124,7 @@ dp = cfg.get("dms_plugins", {})
 emit("NOKRON_DMS_PLUGINS", dp.get("plugins", []))
 emit("NOKRON_DMS_REGISTRY", dp.get("registry", []))
 
-# dankinstall (headless mode for the vendored upstream installer).
-# Flag semantics verified against core/cmd/dankinstall/main.go at the
-# latest released tag (v1.5.3) — NOT against master HEAD, which has
-# unreleased flags that produce "unknown flag" errors when passed to
-# the released binary. Re-verify when bumping the [vendored.dms] pin.
-di = cfg.get("dankinstall", {})
-emit("NOKRON_DANKINSTALL_COMPOSITOR",      di.get("compositor", "hyprland"))
-emit("NOKRON_DANKINSTALL_TERMINAL",        di.get("terminal",   "ghostty"))
-emit("NOKRON_DANKINSTALL_REPLACE_CONFIGS", di.get("replace_configs", []))
-emit("NOKRON_DANKINSTALL_EXCLUDE_DEPS",    di.get("exclude_deps", []))
-emit("NOKRON_DANKINSTALL_DANKSEARCH",      str(bool(di.get("danksearch",   False))).lower())
-emit("NOKRON_DANKINSTALL_DANKCALENDAR",    str(bool(di.get("dankcalendar", False))).lower())
-emit("NOKRON_DANKINSTALL_YES",             str(bool(di.get("yes",          True))).lower())
-emit("NOKRON_DANKINSTALL_INCLUDE_DEPS",    di.get("include_deps", []))
+# services
 svc = cfg.get("services", {})
 emit("NOKRON_SERVICES_ENABLE", svc.get("enable", []))
 emit("NOKRON_SERVICES_DEFAULT", svc.get("set_default", "graphical.target"))
@@ -150,7 +133,6 @@ emit("NOKRON_SERVICES_DEFAULT", svc.get("set_default", "graphical.target"))
 stg = cfg.get("stages", {})
 for k, v in stg.items():
     emit(f"NOKRON_STAGE_{k.upper()}", "true" if v else "false")
-
 PY
 )"
 
@@ -181,8 +163,6 @@ ${detected:-<none>}
 Set [meta].target_user = \"<your-username>\" in nokron.toml."
     fi
   fi
-  # No sha256 verification — personal postinstall. The dms download is
-  # trusted implicitly. Bump [vendored.dms].version when upgrading.
 }
 
 # ── Free-standing log helpers (so sourcing this file is enough) ───────────────
@@ -205,6 +185,6 @@ run_stage() {
     info "stage '${name}' disabled in nokron.toml — skipping"
     return 0
   fi
-  section "stage: ${name}"
+  info "running stage: ${name}"
   "$@"
 }

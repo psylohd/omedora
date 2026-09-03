@@ -18,27 +18,9 @@ name        = "nokron"
 description = "Minimal Fedora + Hyprland + dms + curated apps"
 target_user = ""                  # REQUIRED: set to the desktop user account.
 
-# ── Passwordless sudo for the target user ────────────────────────────────────
-# The vendored dms install script (dankinstall) drops privileges to
-# `target_user` and then itself needs root for dnf/copr operations. It
-# probes the cache via `privesc.CheckCached()` (which runs `sudo -n true`)
-# and aborts cleanly with "sudo auth required before dankinstall. Run
-# sudo -v before dankinstall to cache creds" if there's no cached
-# credential for the target user. On a stock Fedora Server, target_user
-# is created via `useradd` + `passwd` and does NOT have passwordless
-# sudo — so the cache is always empty when install.sh runs as root, and
-# the vendor stage would die halfway through.
-#
-# To make the install actually unattended, the self-check stage drops a
-# sudoers file at /etc/sudoers.d/99-nokron-<user> granting the target
-# user NOPASSWD on every command. This is the same posture Fedora
-# Workstation sets up by default for the first user; Fedora Server
-# doesn't, so we apply it ourselves.
-#
-# To opt out, set `passwordless = false` and pre-cache target_user's
-# sudo credentials before running install.sh:
-#   sudo -u <user> sudo -v   # or
-#   echo '<user> ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/99-nokron-<user>
+# The install script runs as root and configures the system. No privileged
+# operations are needed at runtime after install.sh completes — the target
+# user's systemd session handles dms and other user services.
 #
 # To clean up after the install:  rm /etc/sudoers.d/99-nokron-<user>
 [sudo]
@@ -48,6 +30,8 @@ passwordless = true   # drop a NOPASSWD sudoers file for target_user
 # ── Repositories ──────────────────────────────────────────────────────────────
 [coprs]
 enable = [
+  "avengemedia/danklinux",        # quickshell-git, matugen, cliphist, danksearch, dgop, ghostty
+  "avengemedia/dms",              # dms (auto-enables danklinux as build dep)
   "lionheartp/Hyprland",          # the Hyprland stack on Fedora 43/44/45
   "leloubil/wl-clip-persist",     # Wayland clipboard persistence
   "tofik/nwg-shell",              # nwg-look + nwg-displays
@@ -125,24 +109,18 @@ optional_copr = [
 ]
 
 
-# ── Vendored: dms install script + tuigreet source ────────────────────────────
-# dms: instead of pulling individual binaries (which would miss the bundled
-# asset pack and QML files), vendor the upstream dms installer script at
-# lib/vendor/danklinux-install.sh and run it. It downloads the latest dms
-# release, verifies sha256, decompresses, and runs the dms installer.
-# dgop is NOT vendored — install via Fedora repos (`dnf5 install dgop`).
-# dms-greeter is NOT vendored — it ships inside dms's asset bundle.
-[vendored.dms]
-install_script = "lib/vendor/danklinux-install.sh"
-run_as_user   = true            # drop to target_user before invoking (script refuses root)
+# ── DMS packages (from avengemedia/danklinux + avengemedia/dms COPRs) ──────────
+# dms + its deps come from COPR. The danklinux COPR provides: quickshell-git,
+# matugen, cliphist, danksearch, dgop. The dms COPR provides: dms.
+# dms auto-installs quickshell-git from danklinux if not already present.
+# Note: dankcalendar-git is in avengemedia/dms-git (unstable), not in
+# the stable COPRs.
+[packages.dms]
+# dms: installed as a single package; weak deps (danksearch, matugen, cava,
+# qt6ct, qt6-qtmultimedia) are installed by default. Pass
+# --setopt=install_weak_deps=False to skip them.
+install_weak_deps = true
 
-# tuigreet: cloned from a public git repo (your fork), checked out on a
-# branch (or pinned commit), built with cargo.
-[vendored.tuigreet]
-repo_url    = "https://github.com/psylohd/tuigreet.git"
-branch      = "tweak"
-commit      = ""               # ← optional: pin to a specific commit
-# If empty, it just checks out the branch tip.
 [flatpak]
 # Per-user browsers (Zen) live under `user` so they install into
 # ~/.local/share/flatpak, are owned by the desktop user, and don't
@@ -159,18 +137,15 @@ user = [
 #   [dms_plugins].registry — plugin IDs from the dms registry
 #     (https://github.com/AvengeMedia/dms-plugin-registry), installed via
 #     `dms plugins install <id>`. These are quickshell UI plugins (e.g.
-#     `dankQuickSearch` from alcxyz). Do NOT confuse with the standalone
-#     `danksearch` (filesystem search service) and `dankcalendar` (CalDAV
-#     binary) — those are installed by the vendored `dankinstall` via
-#     [dankinstall].danksearch / .dankcalendar above.
+#     `dankQuickSearch`). Do NOT confuse with the standalone `danksearch`
+#     binary — that is installed from avengemedia/danklinux COPR.
 [dms_plugins]
 plugins = [
   # "https://github.com/your-fork/wallpaperCarousel",
   # "https://github.com/your-fork/homeAssistantMonitor",
 ]
 registry = [
-  # "dankQuickSearch",   # quickshell launcher plugin (NOT the same as
-                          #   the danksearch binary installed by dankinstall)
+  # "dankQuickSearch",   # quickshell UI launcher plugin (NOT the danksearch binary)
 ]
 # ── Config trees ──────────────────────────────────────────────────────────────
 # Drop each tree into target_user's $HOME with timestamped .bak on conflict.
@@ -181,64 +156,10 @@ tuigreet_src = ""                 # legacy: path to a pre-cloned Cargo workspace
 hyprland   = "hyprland"           # → $HOME/.config/hypr
 dms        = "DankMaterialShell"  # → $HOME/.config/DankMaterialShell
 quickshell = "quickshell"         # → $HOME/.config/quickshell (dms wraps this)
-
-
-# ── DankInstall (headless) ────────────────────────────────────────────────────
-# Drives the vendored upstream installer (lib/vendor/danklinux-install.sh)
-# in unattended mode. The wrapper downloads the **latest GitHub release**
-# of `dankinstall` (currently v1.5.3), so this section's flag set must
-# match what the latest release accepts — not what's on master HEAD
-# (which has unreleased flags like --privesc and --dms-greeter that
-# produce "unknown flag" errors when passed to the released binary).
-#
-# Supported by the released v1.5.3 binary (core/cmd/dankinstall/main.go
-# at the v1.5.3 tag):
-#
-#   -c / --compositor    hyprland | niri | mango
-#   -t / --term          ghostty | kitty | alacritty
-#   -y / --yes           required for headless mode
-#   --include-deps       list of optional deps to enable (e.g. dms-greeter)
-#   --exclude-deps       list of deps to skip
-#   --replace-configs    list of configs to overwrite (each is a separate
-#                        flag invocation; pflag StringSliceVar, NOT a
-#                        comma-separated single value)
-#   --replace-configs-all
-#   --danksearch         install danksearch + enable user service
-#   --dankcalendar       install dankcalendar
-#
-# NOT in the released v1.5.3 binary (added on master after v1.5.3):
-#   --privesc, --dms-greeter, --all-features, --git, --git-deps
-#
-# Notes on flag shapes:
-#   - `replace_configs` and `exclude_deps` are TOML lists. Each element is
-#     emitted as its own --flag <value> invocation. The bash `${arr[*]}`
-#     form would join with spaces and produce a single string with an
-#     embedded space, which pflag treats as one value — the runner then
-#     errors with "unknown config 'hyprland ghostty'". The stage script
-#     iterates and emits the repeated-flag form.
-#   - `dms-greeter` is an optional dep, off by default. We use
-#     `exclude_deps = ["dms-greeter"]` to be explicit. (Dedicated
-#     --dms-greeter exists on master but not in v1.5.3.)
-#   - `--yes` is required for headless mode — without it the runner prints
-#     a plan and aborts with ErrConfirmationRequired.
-#   - The runner autodetects the privilege-escalation tool (sudo / doas /
-#     run0). Make sure `target_user` either has passwordless sudo OR
-#     you've cached their credentials with `sudo -u <user> sudo -v` before
-#     running install.sh. The runner aborts cleanly with a clear message
-#     if no cached credentials are available.
-[dankinstall]
-compositor      = "hyprland"          # -c: hyprland | niri | mango
-terminal        = "ghostty"           # -t: ghostty | kitty | alacritty
-replace_configs = ["hyprland", "ghostty"]
-exclude_deps    = ["dms-greeter"]     # not in v1.5.3's flag set as a
-                                       # dedicated bool; we use the
-                                       # generic --exclude-deps which
-                                       # works in both v1.5.3 and master
-danksearch      = true                # install danksearch binary + service
-dankcalendar    = true                # install dankcalendar binary
-yes             = true                # -y: required for headless mode
-
-# ── Greeter ───────────────────────────────────────────────────────────────────
+vendored_tuigreet_repo_url = "https://github.com/psylohd/tuigreet.git"
+vendored_tuigreet_branch   = "tweak"
+vendored_tuigreet_commit   = ""
+# ── Greeter
 # backend = "tuigreet"     — current Rust build under [vendored.tuigreet]
 # The exact command + user are hardcoded in lib/stage-greetd.sh so the
 # installed greetd config matches what the Hyprland RPM expects to launch

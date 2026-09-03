@@ -19,13 +19,16 @@ stage_copr() {
       info "  enabling ${copr}"
       dnf5 -y copr enable "${copr}" || die "failed to enable COPR: ${copr}"
     fi
-    # COPR-generated .repo files have gpgcheck=1 but the RPM signatures
-    # often don't validate (key imported, payload untrusted). Patch the repo
-    # file to gpgcheck=0 so both `dnf5 install` and any sub-script's dnf
-    # call (e.g. vendored dankinstall) skip verification for these repos.
+    # COPR-generated .repo files have gpgcheck=1 and repo_gpgcheck=1 but
+    # the RPM signatures often don't validate (key imported, payload
+    # untrusted). Patch the repo file so both this installer's dnf5 calls
+    # and any sub-script's dnf invocation (e.g. vendored dankinstall)
+    # skip verification for these repos.  sed is tolerant of whitespace
+    # around the equals sign.
     local repo_file="/etc/yum.repos.d/_copr:copr.fedorainfracloud.org:${copr//\//:}.repo"
     if [[ -f "${repo_file}" ]]; then
-      sed -i 's/^gpgcheck=1$/gpgcheck=0/' "${repo_file}"
+      sed -i 's/^\([[:space:]]*gpgcheck[[:space:]]*=[[:space:]]*\)[0-9]/\10/' "${repo_file}"
+      sed -i 's/^\([[:space:]]*repo_gpgcheck[[:space:]]*=[[:space:]]*\)[0-9]/\10/' "${repo_file}"
     fi
   done
   fi
