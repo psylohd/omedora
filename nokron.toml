@@ -126,20 +126,24 @@ user = [
   "app.zen_browser.zen",            # Zen Browser (not in any dnf repo)
 ]
 # ── DMS plugins ───────────────────────────────────────────────────────────────
-# dms plugin install <source> for each. Use a git URL or a known registry
-# entry. Plugins are NOT shipped in the repo (kept out for size + hygiene);
-# the dms stage installs them at deploy time.
+# Two sources, both installed by the dms stage:
+#   [dms_plugins].plugins  — git URLs (cloned into
+#                             ~/.config/DankMaterialShell/plugins/)
+#   [dms_plugins].registry — plugin IDs from the dms registry
+#     (https://github.com/AvengeMedia/dms-plugin-registry), installed via
+#     `dms plugins install <id>`. These are quickshell UI plugins (e.g.
+#     `dankQuickSearch` from alcxyz). Do NOT confuse with the standalone
+#     `danksearch` (filesystem search service) and `dankcalendar` (CalDAV
+#     binary) — those are installed by the vendored `dankinstall` via
+#     [dankinstall].danksearch / .dankcalendar above.
 [dms_plugins]
-# `plugins`     — git URLs (any branch). The dms stage clones + symlinks.
-# `registry`    — plugin IDs from https://github.com/AvengeMedia/dms-plugin-registry
-#                  (e.g. "dankQuickSearch"). Installed via `dms plugins install <id>`.
 plugins = [
   # "https://github.com/your-fork/wallpaperCarousel",
   # "https://github.com/your-fork/homeAssistantMonitor",
 ]
 registry = [
-  "dankQuickSearch",   # alcxyz/DankQuickSearch
-  "dankCalendar",      # alcxyz/DankCalendar
+  # "dankQuickSearch",   # quickshell launcher plugin (NOT the same as
+                          #   the danksearch binary installed by dankinstall)
 ]
 # ── Config trees ──────────────────────────────────────────────────────────────
 # Drop each tree into target_user's $HOME with timestamped .bak on conflict.
@@ -153,17 +157,37 @@ quickshell = "quickshell"         # → $HOME/.config/quickshell (dms wraps this
 
 
 # ── DankInstall (headless) ────────────────────────────────────────────────────
-# Drives the vendored upstream installer (lib/vendor/danklinux-install.sh) in
-# unattended mode. Every flag here maps 1:1 to a `dankinstall` CLI flag.
-# Leave `replace_configs` set to ensure our config tree wins over the
-# installer's defaults; otherwise it leaves existing configs alone.
+# Drives the vendored upstream installer (lib/vendor/danklinux-install.sh)
+# in unattended mode. Every field here maps 1:1 to a `dankinstall` CLI flag
+# (verified against core/cmd/dankinstall/main.go on master — see commit
+# history for the exact validation rules in core/internal/headless/runner.go).
+#
+# Notes on flag shapes:
+#   - `compositor` and `terminal` are scalars. Valid values for compositor:
+#     "niri" | "hyprland" | "mango". For terminal: "ghostty" | "kitty" |
+#     "alacritty". Anything else makes the runner die with a clear error.
+#   - `replace_configs` is a TOML list. Each element is emitted as its own
+#     --replace-configs <name> flag (pflag StringSliceVar — do NOT pass as a
+#     comma-separated string). Valid values: niri | hyprland | ghostty |
+#     kitty | alacritty. Pass --replace-configs-all to replace everything.
+#   - `exclude_deps` is a TOML list, also emitted as repeated flags.
+#   - `danksearch` / `dankcalendar` / `dms_greeter` are dedicated bool
+#     flags on the binary. There is also a generic --include-deps but the
+#     dedicated flags are cleaner and resolved earlier by the runner.
+#   - `yes` (with -y short form) is REQUIRED for headless mode — without
+#     it the runner prints a plan and aborts with ErrConfirmationRequired.
+#   - `privesc` is "sudo" | "doas" | "run0" | "" (autodetect). The runner
+#     aborts if no cached credentials are available, so run `sudo -v` first.
 [dankinstall]
-compositor      = "hyprland"          # -c: hyprland | niri
+compositor      = "hyprland"          # -c: hyprland | niri | mango
 terminal        = "ghostty"           # -t: ghostty | kitty | alacritty
-replace_configs = ["hyprland", "ghostty"]   # replace just our compositor + term
-exclude_deps    = ["dms-greeter"]     # don't install the greetd greeter
-include_deps    = []                  # opt-in extra deps (empty = defaults)
+replace_configs = ["hyprland", "ghostty"]
+exclude_deps    = ["dms-greeter"]
+danksearch      = true                # install danksearch binary + service
+dankcalendar    = true                # install dankcalendar binary
+dms_greeter     = false               # explicit: do NOT install dms-greeter
 yes             = true                # -y: required for headless mode
+privesc         = "sudo"              # sudo | doas | run0 | "" (autodetect)
 # ── Greeter ───────────────────────────────────────────────────────────────────
 # backend = "tuigreet"     — current Rust build under [vendored.tuigreet]
 # backend = "dms-greeter"  — vendored binary (not currently shipped)
