@@ -14,11 +14,24 @@ stage_flatpak() {
     info "flatpak not installed — installing"
     dnf5 -y install flatpak || die "failed to install flatpak"
   }
-
   # Idempotent: --if-not-exists is supported by recent flatpak.
   flatpak remote-add --if-not-exists flathub \
     https://dl.flathub.org/repo/flathub.flatpakrepo \
     || die "failed to add Flathub remote"
+
+  # System-scope flatpak CLI reads /var/lib/flatpak/repo (added above is
+  # already visible there). User-scope reads ~/.local/share/flatpak/repo,
+  # which is a separate repo and needs flathub added again for the
+  # desktop user's own remote list. Without this, `flatpak install --user
+  # flathub ...` errors with "Remote 'flathub' not found" because the
+  # system remote isn't visible from the user repo.
+  if [[ ${#OMEDORA_FLATPAK_USER[@]} -gt 0 ]]; then
+    info "adding flathub to user-scope remote for ${OMEDORA_TARGET_USER}"
+    sudo -u "${OMEDORA_TARGET_USER}" env HOME="${user_home}" \
+      flatpak remote-add --if-not-exists --user flathub \
+      https://dl.flathub.org/repo/flathub.flatpakrepo \
+      || warn "failed to add user-scope flathub (user Flatpaks will fail)"
+  fi
 
   if [[ ${#OMEDORA_FLATPAK_SYSTEM[@]} -gt 0 ]]; then
     info "installing ${#OMEDORA_FLATPAK_SYSTEM[@]} system Flatpak(s)"
