@@ -1,5 +1,5 @@
 #!/bin/bash
-# tweaks.sh — apply individual Nokron tweaks after a full install.
+# tweaks.sh — apply individual Omedora tweaks after a full install.
 #
 # `install.sh` is the big entrypoint that runs every stage on a fresh
 # system. This script is the small, surgical counterpart: pick one tweak,
@@ -11,7 +11,7 @@
 #
 # Usage:
 #   sudo ./tweaks.sh                     # list available tweaks
-#   sudo ./tweaks.sh plymouth            # re-apply Plymouth nokron theme
+#   sudo ./tweaks.sh plymouth            # re-apply Plymouth omedora theme
 #   sudo ./tweaks.sh tuigreet            # rebuild + reinstall tuigreet
 #   sudo ./tweaks.sh greetd              # rewrite /etc/greetd/config.toml
 #   sudo ./tweaks.sh hyprland            # redeploy ~/.config/hypr/
@@ -28,8 +28,8 @@
 set -eo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-export NOKRON_REPO_ROOT="${SCRIPT_DIR}"
-export NOKRON_CONFIG="${NOKRON_CONFIG:-${SCRIPT_DIR}/nokron.toml}"
+export OMEDORA_REPO_ROOT="${SCRIPT_DIR}"
+export OMEDORA_CONFIG="${OMEDORA_CONFIG:-${SCRIPT_DIR}/omedora.toml}"
 
 source "${SCRIPT_DIR}/lib/parser.sh"
 source "${SCRIPT_DIR}/lib/self-check.sh"
@@ -47,7 +47,7 @@ declare -A TWEAK_FN=(
   [services]=tweak_services
 )
 declare -A TWEAK_DESC=(
-  [plymouth]="Plymouth nokron theme (script module)"
+  [plymouth]="Plymouth omedora theme (script module)"
   [tuigreet]="Rebuild + install tuigreet from [vendored.tuigreet]"
   [greetd]="Wire /etc/greetd/config.toml + /usr/local/bin/start-hyprland"
   [hyprland]="Deploy hyprland/ → ~/.config/hypr/"
@@ -82,12 +82,12 @@ tweak_plymouth()   { section "tweak: plymouth";   stage_config_plymouth; }
 tweak_tuigreet()   { section "tweak: tuigreet";   stage_config_tuigreet; }
 tweak_greetd()     { section "tweak: greetd";     stage_greetd; }
 tweak_hyprland()   {
-  local home; home="$(getent passwd "${NOKRON_TARGET_USER}" | cut -d: -f6)"
+  local home; home="$(getent passwd "${OMEDORA_TARGET_USER}" | cut -d: -f6)"
   section "tweak: hyprland"
   stage_config_hyprland "${home}"
 }
 tweak_quickshell() {
-  local home; home="$(getent passwd "${NOKRON_TARGET_USER}" | cut -d: -f6)"
+  local home; home="$(getent passwd "${OMEDORA_TARGET_USER}" | cut -d: -f6)"
   section "tweak: quickshell"
   stage_config_quickshell "${home}"
 }
@@ -102,7 +102,7 @@ tweak_diff() {
   echo "(diff stub) — would overwrite files in:"
   case "${name}" in
     plymouth)
-      echo "  /usr/share/plymouth/themes/nokron/"
+      echo "  /usr/share/plymouth/themes/omedora/"
       echo "  /etc/plymouth/plymouthd.conf" ;;
     tuigreet)
       echo "  /usr/local/bin/tuigreet"
@@ -111,11 +111,11 @@ tweak_diff() {
       echo "  /etc/greetd/config.toml"
       echo "  /usr/local/bin/start-hyprland" ;;
     hyprland)
-      echo "  ~${NOKRON_TARGET_USER}/.config/hypr/" ;;
+      echo "  ~${OMEDORA_TARGET_USER}/.config/hypr/" ;;
     quickshell)
-      echo "  ~${NOKRON_TARGET_USER}/.config/quickshell/" ;;
+      echo "  ~${OMEDORA_TARGET_USER}/.config/quickshell/" ;;
     dms)
-      echo "  ~${NOKRON_TARGET_USER}/.config/DankMaterialShell/" ;;
+      echo "  ~${OMEDORA_TARGET_USER}/.config/DankMaterialShell/" ;;
     services)
       echo "  systemctl enable greetd plymouth-start"
       echo "  systemctl set-default graphical.target" ;;
@@ -129,17 +129,17 @@ tweak_revert() {
   local name="$1"
   local paths=()
   case "${name}" in
-    plymouth) paths=(/usr/share/plymouth/themes/nokron /etc/plymouth/plymouthd.conf) ;;
+    plymouth) paths=(/usr/share/plymouth/themes/omedora /etc/plymouth/plymouthd.conf) ;;
     tuigreet) paths=(/usr/local/bin/tuigreet /etc/tuigreet) ;;
     greetd)   paths=(/etc/greetd/config.toml /usr/local/bin/start-hyprland) ;;
     hyprland)
-      local h; h="$(getent passwd "${NOKRON_TARGET_USER}" | cut -d: -f6)"
+      local h; h="$(getent passwd "${OMEDORA_TARGET_USER}" | cut -d: -f6)"
       paths=("${h}/.config/hypr") ;;
     quickshell)
-      local h; h="$(getent passwd "${NOKRON_TARGET_USER}" | cut -d: -f6)"
+      local h; h="$(getent passwd "${OMEDORA_TARGET_USER}" | cut -d: -f6)"
       paths=("${h}/.config/quickshell") ;;
     dms)
-      local h; h="$(getent passwd "${NOKRON_TARGET_USER}" | cut -d: -f6)"
+      local h; h="$(getent passwd "${OMEDORA_TARGET_USER}" | cut -d: -f6)"
       paths=("${h}/.config/DankMaterialShell") ;;
     services)
       warn "--revert doesn't apply to services (use systemctl disable + set-default)" ; return 0 ;;

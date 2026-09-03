@@ -1,10 +1,10 @@
 #!/bin/bash
-# Install the Nokron Plymouth theme (FEDORA ASCII wordmark on Fedora blue).
+# Install the Omedora Plymouth theme (FEDORA ASCII wordmark on Fedora blue).
 # Run as root or with sudo.
 
 set -euo pipefail
 
-THEME_NAME="nokron"
+THEME_NAME="omedora"
 THEME_DIR="/usr/share/plymouth/themes/${THEME_NAME}"
 SOURCE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -13,9 +13,9 @@ if [[ $EUID -ne 0 ]]; then
   exec sudo bash "$0" "$@"
 fi
 
-echo "Installing Nokron Plymouth theme..."
+echo "Installing Omedora Plymouth theme..."
 
-# ModuleName=script in nokron.plymouth requires plymouth-plugin-script
+# ModuleName=script in omedora.plymouth requires plymouth-plugin-script
 # (ships /usr/lib64/plymouth/script.so). Without it plymouth-set-default-theme
 # fails and Plymouth silently falls back to text mode.
 if ! ls /usr/lib64/plymouth/script.so &>/dev/null; then

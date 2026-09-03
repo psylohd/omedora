@@ -28,12 +28,12 @@ stage_dms() {
   section "configs: DankMaterialShell"
   require_root
 
-  local target_user="${NOKRON_TARGET_USER}"
+  local target_user="${OMEDORA_TARGET_USER}"
   local user_home
   user_home="$(getent passwd "${target_user}" | cut -d: -f6)"
   [[ -d "${user_home}" ]] || die "user home '${user_home}' does not exist"
 
-  local src="${NOKRON_PATH_DMS}"
+  local src="${OMEDORA_PATH_DMS}"
 
   if [[ ! -d "${src}" ]]; then
     warn "DankMaterialShell source dir not found: ${src} (skipping)"
@@ -53,14 +53,14 @@ stage_dms() {
 
   # ── Plugins ─────────────────────────────────────────────────────────────────
   # Two sources:
-  #   NOKRON_DMS_PLUGINS   — git URLs (cloned into ~/.config/DankMaterialShell/plugins/)
-  #   NOKRON_DMS_REGISTRY  — plugin IDs from the dms registry
+  #   OMEDORA_DMS_PLUGINS   — git URLs (cloned into ~/.config/DankMaterialShell/plugins/)
+  #   OMEDORA_DMS_REGISTRY  — plugin IDs from the dms registry
   #                          (e.g. "dankQuickSearch"). Installed via
   #                          `dms plugins install <id>`.
   # Both lists are optional; the install step is skipped if both are empty.
-  if [[ ${#NOKRON_DMS_PLUGINS[@]} -eq 0 && ${#NOKRON_DMS_REGISTRY[@]} -eq 0 ]]; then
+  if [[ ${#OMEDORA_DMS_PLUGINS[@]} -eq 0 && ${#OMEDORA_DMS_REGISTRY[@]} -eq 0 ]]; then
     info "no [dms_plugins] configured — skipping plugin install"
-    info "edit nokron.toml [dms_plugins].plugins (git URLs) or"
+    info "edit omedora.toml [dms_plugins].plugins (git URLs) or"
     info ".registry (registry IDs) to add plugins"
   fi
 
@@ -72,9 +72,9 @@ stage_dms() {
   fi
 
   # `dms plugins install` (plural) for registry IDs.
-  if [[ ${#NOKRON_DMS_REGISTRY[@]} -gt 0 ]]; then
-    info "installing ${#NOKRON_DMS_REGISTRY[@]} dms plugin(s) from registry as ${target_user}"
-    for pid in "${NOKRON_DMS_REGISTRY[@]}"; do
+  if [[ ${#OMEDORA_DMS_REGISTRY[@]} -gt 0 ]]; then
+    info "installing ${#OMEDORA_DMS_REGISTRY[@]} dms plugin(s) from registry as ${target_user}"
+    for pid in "${OMEDORA_DMS_REGISTRY[@]}"; do
       info "  dms plugins install ${pid}"
       if ! sudo -u "${target_user}" env HOME="${user_home}" DMS_PRIVESC=sudo \
             dms plugins install "${pid}"; then
@@ -87,12 +87,12 @@ stage_dms() {
   # upstream `dms plugins install <git-url>` form may also work, but
   # sticking to a plain git clone avoids surprises with how the registry
   # is queried.
-  if [[ ${#NOKRON_DMS_PLUGINS[@]} -gt 0 ]]; then
+  if [[ ${#OMEDORA_DMS_PLUGINS[@]} -gt 0 ]]; then
     local plugins_dir="${user_home}/.config/DankMaterialShell/plugins"
     install -d -m 0755 "${plugins_dir}"
     chown "${target_user}:${target_user}" "${plugins_dir}"
-    info "installing ${#NOKRON_DMS_PLUGINS[@]} dms plugin(s) from git as ${target_user}"
-    for url in "${NOKRON_DMS_PLUGINS[@]}"; do
+    info "installing ${#OMEDORA_DMS_PLUGINS[@]} dms plugin(s) from git as ${target_user}"
+    for url in "${OMEDORA_DMS_PLUGINS[@]}"; do
       local name
       name="$(basename "${url}" .git)"
       info "  git clone ${url} → ${plugins_dir}/${name}"

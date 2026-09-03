@@ -1,4 +1,4 @@
-# lib/stage-flatpak.sh — install Flatpak apps from nokron.toml.
+# lib/stage-flatpak.sh — install Flatpak apps from omedora.toml.
 #
 # Zen Browser is the obvious one: not in any dnf repo, lives on Flathub.
 # Flathub is added once. System-scope installs use --system (run as root,
@@ -20,23 +20,23 @@ stage_flatpak() {
     https://dl.flathub.org/repo/flathub.flatpakrepo \
     || die "failed to add Flathub remote"
 
-  if [[ ${#NOKRON_FLATPAK_SYSTEM[@]} -gt 0 ]]; then
-    info "installing ${#NOKRON_FLATPAK_SYSTEM[@]} system Flatpak(s)"
+  if [[ ${#OMEDORA_FLATPAK_SYSTEM[@]} -gt 0 ]]; then
+    info "installing ${#OMEDORA_FLATPAK_SYSTEM[@]} system Flatpak(s)"
     # --or-update: install if missing, update if already installed.
     # positional app-id after remote name (not --flag app-id).
-    flatpak install -y --system flathub --or-update "${NOKRON_FLATPAK_SYSTEM[@]}" \
+    flatpak install -y --system flathub --or-update "${OMEDORA_FLATPAK_SYSTEM[@]}" \
       || warn "system Flatpak install had failures (continuing)"
   fi
 
-  if [[ ${#NOKRON_FLATPAK_USER[@]} -gt 0 ]]; then
-    if ! id "${NOKRON_TARGET_USER}" >/dev/null 2>&1; then
-      die "user-scope flatpaks configured but target_user '${NOKRON_TARGET_USER}' does not exist"
+  if [[ ${#OMEDORA_FLATPAK_USER[@]} -gt 0 ]]; then
+    if ! id "${OMEDORA_TARGET_USER}" >/dev/null 2>&1; then
+      die "user-scope flatpaks configured but target_user '${OMEDORA_TARGET_USER}' does not exist"
     fi
-    info "installing ${#NOKRON_FLATPAK_USER[@]} user Flatpak(s) as ${NOKRON_TARGET_USER}"
+    info "installing ${#OMEDORA_FLATPAK_USER[@]} user Flatpak(s) as ${OMEDORA_TARGET_USER}"
     # `sudo -u foo` without -H keeps $HOME=root's, which would land the
     # install in /root/.local/share/flatpak. Set HOME explicitly so
-    sudo -u "${NOKRON_TARGET_USER}" env HOME="${user_home}" \
-      flatpak install -y --user flathub --or-update "${NOKRON_FLATPAK_USER[@]}" \
+    sudo -u "${OMEDORA_TARGET_USER}" env HOME="${user_home}" \
+      flatpak install -y --user flathub --or-update "${OMEDORA_FLATPAK_USER[@]}" \
       || warn "user Flatpak install had failures (continuing)"
   fi
 }

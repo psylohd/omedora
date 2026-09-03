@@ -1,4 +1,4 @@
-# Nokron Plymouth Theme
+# Omedora Plymouth Theme
 
 A Plymouth boot splash replicating Omarchy's ASCII-block wordmark style,
 with a Fedora-blue background and the letters **FEDORA** centered.
@@ -32,21 +32,21 @@ background.
 ## Install
 
 ```bash
-cd ~/dev/nokron-plymouth
-./install.sh   # installs to /usr/share/plymouth/themes/nokron, rebuilds initramfs
+cd ~/dev/omedora-plymouth
+./install.sh   # installs to /usr/share/plymouth/themes/omedora, rebuilds initramfs
 ```
 
 The installer:
-1. Copies theme files to `/usr/share/plymouth/themes/nokron/`
-2. Sets `nokron` as the default Plymouth theme
+1. Copies theme files to `/usr/share/plymouth/themes/omedora/`
+2. Sets `omedora` as the default Plymouth theme
 3. Rebuilds the initramfs with `dracut`
 
 Reboot to see it.
 
 ## Files
 
-- `nokron.plymouth` — Plymouth theme metadata
-- `nokron.script` — Plymouth script-module animation logic
+- `omedora.plymouth` — Plymouth theme metadata
+- `omedora.script` — Plymouth script-module animation logic
 - `logo.png` — 800×183 ASCII wordmark PNG (transparent background)
 - `lock.png`, `entry.png`, `bullet.png`, `progress_bar.png`, `progress_box.png` — UI elements reused from Omarchy
 - `logos/fedora.txt` — the 7-row ASCII source for the wordmark

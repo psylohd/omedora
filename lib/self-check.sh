@@ -20,23 +20,23 @@ self_check() {
   info "running on Fedora ${version_id:-unknown}"
 
   # 2. Confirm target user exists + has a real home.
-  if ! id "${NOKRON_TARGET_USER}" >/dev/null 2>&1; then
-    die "target_user '${NOKRON_TARGET_USER}' does not exist on this system.
-  Create it first:  useradd -m ${NOKRON_TARGET_USER}"
+  if ! id "${OMEDORA_TARGET_USER}" >/dev/null 2>&1; then
+    die "target_user '${OMEDORA_TARGET_USER}' does not exist on this system.
+  Create it first:  useradd -m ${OMEDORA_TARGET_USER}"
   fi
   local home=""
-  home="$(getent passwd "${NOKRON_TARGET_USER}" | cut -d: -f6)"
+  home="$(getent passwd "${OMEDORA_TARGET_USER}" | cut -d: -f6)"
   if [[ ! -d "${home}" ]]; then
-    die "home directory '${home}' does not exist for ${NOKRON_TARGET_USER}"
+    die "home directory '${home}' does not exist for ${OMEDORA_TARGET_USER}"
   fi
-  info "target user: ${NOKRON_TARGET_USER} (home=${home})"
+  info "target user: ${OMEDORA_TARGET_USER} (home=${home})"
 
 
   # 3. Plymouth script plugin. If plymouth is missing the script-plugin is
   #    missing and the plymouth stage is enabled, install it now rather
   #    than aborting — much friendlier when running on a fresh server.
   if ! rpm -q plymouth-plugin-script >/dev/null 2>&1; then
-    if [[ "${NOKRON_STAGE_PLYMOUTH}" == "true" ]]; then
+    if [[ "${OMEDORA_STAGE_PLYMOUTH}" == "true" ]]; then
       warn "plymouth-plugin-script is NOT installed — installing now"
       dnf5 -y install plymouth-plugin-script \
         || die "dnf5 install plymouth-plugin-script failed. Run manually:
@@ -50,7 +50,7 @@ self_check() {
   #    'greeter' — that's dms-greeter's convention). If it's missing and
   #    the greetd stage is enabled, install greetd to materialise it.
   if ! id greetd >/dev/null 2>&1; then
-    if [[ "${NOKRON_STAGE_GREETD}" == "true" ]]; then
+    if [[ "${OMEDORA_STAGE_GREETD}" == "true" ]]; then
       warn "the 'greetd' user does not exist — installing greetd now"
       dnf5 -y install greetd \
         || die "dnf5 install greetd failed. Run manually:
@@ -60,54 +60,54 @@ self_check() {
 
   # 5. Network sanity for the vendor stage. Cheap curl --head to the
   #    GitHub release hostname; non-fatal but warn.
-  if [[ "${NOKRON_STAGE_VENDOR}" == "true" ]] || \
-     [[ "${NOKRON_STAGE_COPR}" == "true" ]] || \
-     [[ "${NOKRON_STAGE_FLATPAK}" == "true" ]]; then
+  if [[ "${OMEDORA_STAGE_VENDOR}" == "true" ]] || \
+     [[ "${OMEDORA_STAGE_COPR}" == "true" ]] || \
+     [[ "${OMEDORA_STAGE_FLATPAK}" == "true" ]]; then
     if ! curl -fsSL --max-time 5 -o /dev/null https://github.com 2>/dev/null; then
       warn "github.com unreachable — vendor / COPR / flatpak stages may fail"
     fi
   fi
 
   # 7. Plymouth theme source must exist if plymouth stage is enabled.
-  if [[ "${NOKRON_STAGE_PLYMOUTH}" == "true" ]]; then
-    if [[ ! -d "${NOKRON_PATH_PLYMOUTH}" ]]; then
-      die "plymouth source dir not found: ${NOKRON_PATH_PLYMOUTH}"
+  if [[ "${OMEDORA_STAGE_PLYMOUTH}" == "true" ]]; then
+    if [[ ! -d "${OMEDORA_PATH_PLYMOUTH}" ]]; then
+      die "plymouth source dir not found: ${OMEDORA_PATH_PLYMOUTH}"
     fi
-    if [[ ! -f "${NOKRON_PATH_PLYMOUTH}/nokron.plymouth" ]]; then
-      die "nokron.plymouth not found in ${NOKRON_PATH_PLYMOUTH}"
+    if [[ ! -f "${OMEDORA_PATH_PLYMOUTH}/omedora.plymouth" ]]; then
+      die "omedora.plymouth not found in ${OMEDORA_PATH_PLYMOUTH}"
     fi
   fi
 
   # 8. tuigreet: skip src-workspace check if we'll clone fresh from
   #    [vendored.tuigreet].repo_url. Otherwise, require a pre-cloned
   #    Cargo workspace at [paths.repo].tuigreet_src.
-  if [[ "${NOKRON_STAGE_TUIGREET}" == "true" ]]; then
-    if [[ -z "${NOKRON_TUIGREET_REPO_URL}" ]]; then
-      if [[ ! -d "${NOKRON_PATH_TUIGREET_SRC}" ]]; then
-        die "tuigreet Cargo workspace not found: ${NOKRON_PATH_TUIGREET_SRC}
+  if [[ "${OMEDORA_STAGE_TUIGREET}" == "true" ]]; then
+    if [[ -z "${OMEDORA_TUIGREET_REPO_URL}" ]]; then
+      if [[ ! -d "${OMEDORA_PATH_TUIGREET_SRC}" ]]; then
+        die "tuigreet Cargo workspace not found: ${OMEDORA_PATH_TUIGREET_SRC}
 Set [vendored.tuigreet].repo_url + branch (recommended), or point
 [paths.repo].tuigreet_src at a directory containing Cargo.toml."
       fi
-      if [[ ! -f "${NOKRON_PATH_TUIGREET_SRC}/Cargo.toml" ]]; then
-        die "Cargo.toml missing in ${NOKRON_PATH_TUIGREET_SRC}"
+      if [[ ! -f "${OMEDORA_PATH_TUIGREET_SRC}/Cargo.toml" ]]; then
+        die "Cargo.toml missing in ${OMEDORA_PATH_TUIGREET_SRC}"
       fi
     fi
-    if [[ ! -f "${NOKRON_PATH_TUIGREET}/nokron.theme.toml" ]]; then
-      die "tuigreet theme not found: ${NOKRON_PATH_TUIGREET}/nokron.theme.toml"
+    if [[ ! -f "${OMEDORA_PATH_TUIGREET}/omedora.theme.toml" ]]; then
+      die "tuigreet theme not found: ${OMEDORA_PATH_TUIGREET}/omedora.theme.toml"
     fi
   fi
 
   # 9. Hyprland + quickshell config dirs are optional — the script handles
   #    a missing dir gracefully (warn + skip). But warn the user upfront.
-  if [[ "${NOKRON_STAGE_HYPRLAND}" == "true" ]] \
-     && [[ ! -d "${NOKRON_PATH_HYPRLAND}" ]]; then
-    warn "hyprland config dir not found: ${NOKRON_PATH_HYPRLAND}
+  if [[ "${OMEDORA_STAGE_HYPRLAND}" == "true" ]] \
+     && [[ ! -d "${OMEDORA_PATH_HYPRLAND}" ]]; then
+    warn "hyprland config dir not found: ${OMEDORA_PATH_HYPRLAND}
   Create it with your config (at minimum hyprland.conf) before running.
   Continuing — the stage will no-op."
   fi
-  if [[ "${NOKRON_STAGE_QUICKSHELL}" == "true" ]] \
-     && [[ ! -d "${NOKRON_PATH_QUICKSHELL}" ]]; then
-    warn "quickshell config dir not found: ${NOKRON_PATH_QUICKSHELL}
+  if [[ "${OMEDORA_STAGE_QUICKSHELL}" == "true" ]] \
+     && [[ ! -d "${OMEDORA_PATH_QUICKSHELL}" ]]; then
+    warn "quickshell config dir not found: ${OMEDORA_PATH_QUICKSHELL}
   Create it (at minimum shell.qml for dms) before running.
   Continuing — the stage will no-op."
   fi

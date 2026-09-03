@@ -1,9 +1,9 @@
-# nokron
+# omedora
 
 Personal postinstall script for **Fedora Server + Hyprland + dms + Plymouth + tuigreet**.
 
 > **This is a personal-use script. Largely Vibecoded. Not for distribution.**
-> I built it because I wanted a single declarative config file (`nokron.toml`)
+> I built it because I wanted a single declarative config file (`omedora.toml`)
 > that maps to the handful of files I actually need to keep in sync across
 > reinstalls. There is no ISO, no Fedora Spin, no `bootc` image, no
 > signature verification, no hardening. If something breaks, I fix it for
@@ -23,14 +23,14 @@ I recently tried omarchy and really liked hyprland. I didn't like the bloatware,
 ## What's here
 
 ```
-nokron.toml       the entire config: packages, COPRs, vendored dms,
+omedora.toml       the entire config: packages, COPRs, vendored dms,
                   tuigreet fork URL, greeter backend, paths, services
 install.sh        run once on a fresh Fedora Server install
 tweaks.sh         re-apply individual tweaks after the install
 lib/              stage functions shared by both scripts
 hyprland/         Hyprland Lua configs + dms/binds-user.lua + Scripts/
 DankMaterialShell/  dms settings.json, themes/, plugin_settings.json
-plymouth/         Plymouth nokron theme (script module)
+plymouth/         Plymouth omedora theme (script module)
 tuigreet/         tuigreet theme + palette.sh + brand.txt
 ```
 The vendored dms binaries and the tuigreet Cargo workspace are NOT in the
@@ -46,8 +46,8 @@ see the warning above) and clones tuigreet from
 #    Verify the ISO sha256 against the published CHECKSUM before booting.
 
 # 1. Clone + edit config
-git clone https://github.com/psylohd/nokron.git
-cd nokron
+git clone https://github.com/psylohd/omedora.git
+cd omedora
 
 # 2. Run
 sudo ./install.sh --dry-run # preview
@@ -85,7 +85,7 @@ Available tweaks: `plymouth`, `tuigreet`, `greetd`, `hyprland`, `quickshell`,
 
 ---
 
-## Stages (toggle in nokron.toml `[stages]`)
+## Stages (toggle in omedora.toml `[stages]`)
 
 Default order: `copr → dnf → vendor → flatpak → greetd → plymouth → tuigreet → hyprland → quickshell → dms → services`.
 
@@ -126,7 +126,7 @@ sudo ./install.sh --skip flatpak
 ## Bumping dms
 
 ```sh
-# 1. Update [vendored.dms].version in nokron.toml.
+# 1. Update [vendored.dms].version in omedora.toml.
 # 2. (Optional) sanity-check the new release at
 #    https://github.com/AvengeMedia/DankMaterialShell/releases
 # 3. Refresh:

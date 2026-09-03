@@ -1,12 +1,12 @@
 #!/bin/bash
-# install.sh — Nokron post-install entrypoint for Fedora Server.
+# install.sh — Omedora post-install entrypoint for Fedora Server.
 #
-# Reads nokron.toml, then runs each enabled stage in order. Designed for
+# Reads omedora.toml, then runs each enabled stage in order. Designed for
 # the workflow:
 #
 #   1. Install Fedora Server (DVD ISO, minimal layout, no DE).
 #   2. Create your desktop user + set password.
-#   3. Edit nokron.toml — set [meta].target_user.
+#   3. Edit omedora.toml — set [meta].target_user.
 #   4. sudo ./install.sh
 #
 # Usage:
@@ -27,7 +27,7 @@
 set -eo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-export NOKRON_REPO_ROOT="${SCRIPT_DIR}"
+export OMEDORA_REPO_ROOT="${SCRIPT_DIR}"
 
 # ── CLI parsing ───────────────────────────────────────────────────────────────
 DRY_RUN=false
@@ -40,20 +40,20 @@ usage() {
 Usage: sudo ./install.sh [options]
 
 Options:
-  --config PATH      use a non-default nokron.toml
+  --config PATH      use a non-default omedora.toml
   --dry-run          print what would happen, do nothing
   --only stages      comma-separated list of stages to run (e.g. dnf,vendor)
   --skip stages      comma-separated list of stages to skip
   -h, --help         this help
 
 
-Stages (toggleable in nokron.toml [stages]):
+Stages (toggleable in omedora.toml [stages]):
   copr, dnf, vendor, flatpak, plymouth, tuigreet, hyprland,
   quickshell, greetd, dms, services
 (configs = plymouth + tuigreet + hyprland + quickshell in one pass;
  plymouth/tuigreet/hyprland/quickshell are also accepted as aliases for configs)
 
-Default config: ${SCRIPT_DIR}/nokron.toml
+Default config: ${SCRIPT_DIR}/omedora.toml
 USAGE
 }
 
@@ -90,7 +90,7 @@ apply_stage_filter() {
   # below contains both names so users can pass either via --only.
   if [[ -n "${ONLY}" ]]; then
     for s in copr dnf vendor flatpak plymouth tuigreet hyprland quickshell configs greetd dms services; do
-      printf -v "NOKRON_STAGE_${s^^}" "false"
+      printf -v "OMEDORA_STAGE_${s^^}" "false"
     done
     IFS=',' read -ra list <<< "${ONLY}"
     for s in "${list[@]}"; do
@@ -98,28 +98,28 @@ apply_stage_filter() {
         # Sub-stage aliases: enable the sub-stage, its parent (configs), and
         # any hard dependencies the sub-stage requires to function.
         plymouth)
-          printf -v "NOKRON_STAGE_PLYMOUTH" "true"
-          printf -v "NOKRON_STAGE_CONFIGS" "true" ;;
+          printf -v "OMEDORA_STAGE_PLYMOUTH" "true"
+          printf -v "OMEDORA_STAGE_CONFIGS" "true" ;;
         tuigreet)
           # tuigreet binary is installed by the dnf stage; greetd needs it.
-          printf -v "NOKRON_STAGE_DNF" "true"
-          printf -v "NOKRON_STAGE_TUIGREET" "true"
-          printf -v "NOKRON_STAGE_GREETD" "true"
-          printf -v "NOKRON_STAGE_CONFIGS" "true" ;;
+          printf -v "OMEDORA_STAGE_DNF" "true"
+          printf -v "OMEDORA_STAGE_TUIGREET" "true"
+          printf -v "OMEDORA_STAGE_GREETD" "true"
+          printf -v "OMEDORA_STAGE_CONFIGS" "true" ;;
         hyprland)
-          printf -v "NOKRON_STAGE_HYPRLAND" "true"
-          printf -v "NOKRON_STAGE_CONFIGS" "true" ;;
+          printf -v "OMEDORA_STAGE_HYPRLAND" "true"
+          printf -v "OMEDORA_STAGE_CONFIGS" "true" ;;
         quickshell)
-          printf -v "NOKRON_STAGE_DNF" "true"
-          printf -v "NOKRON_STAGE_QUICKSHELL" "true"
-          printf -v "NOKRON_STAGE_CONFIGS" "true" ;;
+          printf -v "OMEDORA_STAGE_DNF" "true"
+          printf -v "OMEDORA_STAGE_QUICKSHELL" "true"
+          printf -v "OMEDORA_STAGE_CONFIGS" "true" ;;
         dms)
           # dms binary + greeter binary come from the vendor stage.
-          printf -v "NOKRON_STAGE_DNF" "true"
-          printf -v "NOKRON_STAGE_VENDOR" "true"
-          printf -v "NOKRON_STAGE_DMS" "true" ;;
+          printf -v "OMEDORA_STAGE_DNF" "true"
+          printf -v "OMEDORA_STAGE_VENDOR" "true"
+          printf -v "OMEDORA_STAGE_DMS" "true" ;;
         *)
-          local var="NOKRON_STAGE_${s^^}"
+          local var="OMEDORA_STAGE_${s^^}"
           printf -v "${var}" "true" ;;
       esac
     done
@@ -128,7 +128,7 @@ apply_stage_filter() {
 if [[ -n "${SKIP}" ]]; then
   IFS=',' read -ra list <<< "${SKIP}"
   for s in "${list[@]}"; do
-    var="NOKRON_STAGE_${s^^}"
+    var="OMEDORA_STAGE_${s^^}"
     printf -v "${var}" "false"
   done
 fi
@@ -142,21 +142,21 @@ if ! grep -q '^ID=fedora' /etc/os-release 2>/dev/null; then
 fi
 
 # Sanity: confirm greeter backend is sane.
-case "${NOKRON_GREETER_BACKEND}" in
+case "${OMEDORA_GREETER_BACKEND}" in
   tuigreet|dms-greeter) ;;
-  *) die "unknown greeter backend: ${NOKRON_GREETER_BACKEND} (expected 'tuigreet' or 'dms-greeter')" ;;
+  *) die "unknown greeter backend: ${OMEDORA_GREETER_BACKEND} (expected 'tuigreet' or 'dms-greeter')" ;;
 esac
 
 # ── Plan ──────────────────────────────────────────────────────────────────────
-section "nokron ${NOKRON_META_NAME}"
-echo "  target user: ${NOKRON_TARGET_USER}"
-echo "  greeter:     ${NOKRON_GREETER_BACKEND}"
-echo "  repo root:   ${NOKRON_REPO_ROOT}"
-echo "  config:      ${NOKRON_CONFIG}"
+section "omedora ${OMEDORA_META_NAME}"
+echo "  target user: ${OMEDORA_TARGET_USER}"
+echo "  greeter:     ${OMEDORA_GREETER_BACKEND}"
+echo "  repo root:   ${OMEDORA_REPO_ROOT}"
+echo "  config:      ${OMEDORA_CONFIG}"
 echo
 echo "  stages:"
 for s in copr dnf vendor flatpak plymouth tuigreet hyprland quickshell greetd dms services; do
-  f="NOKRON_STAGE_${s^^}"
+  f="OMEDORA_STAGE_${s^^}"
   v="${!f:-false}"
   # configs is the parent of the sub-stages; show it too.
   if [[ "${s}" == "plymouth" ]] || [[ "${s}" == "tuigreet" ]] || \
@@ -195,12 +195,12 @@ Next steps:
   4. To re-run only a stage:  sudo ./install.sh --only vendor
 
 All installed files live under:
-  /usr/share/plymouth/themes/nokron
+  /usr/share/plymouth/themes/omedora
   /etc/tuigreet/                /usr/local/bin/tuigreet
   /etc/greetd/config.toml       /usr/bin/start-hyprland
   /usr/local/bin/{dms,dgop}
-  ~${NOKRON_TARGET_USER}/.config/hypr/
-  ~${NOKRON_TARGET_USER}/.config/quickshell/
+  ~${OMEDORA_TARGET_USER}/.config/hypr/
+  ~${OMEDORA_TARGET_USER}/.config/quickshell/
 
 Backups of overwritten files have timestamped .bak.<date> suffixes.
 DONE

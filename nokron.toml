@@ -1,4 +1,4 @@
-# nokron.toml — single source of truth for the Fedora post-install.
+# omedora.toml — single source of truth for the Fedora post-install.
 #
 # fedora_install.sh reads this. Every section corresponds to a stage of the
 # installer. Edit a list, re-run the script, get the same outcome.
@@ -14,7 +14,7 @@
 
 # ── Identity ──────────────────────────────────────────────────────────────────
 [meta]
-name        = "nokron"
+name        = "omedora"
 description = "Minimal Fedora + Hyprland + dms + curated apps"
 target_user = ""                  # REQUIRED: set to the desktop user account.
 
@@ -89,7 +89,7 @@ required = [
   "ghostty", "qt6ct",
   "playerctl", "gnome-keyring",
   # Boot splash
-  "plymouth", "plymouth-plugin-script",   # plugin-script is required by nokron theme
+  "plymouth", "plymouth-plugin-script",   # plugin-script is required by omedora theme
   "papirus-icon-theme" # Icon pack
 ]
 
@@ -141,7 +141,7 @@ registry = [
 # ── Config trees ──────────────────────────────────────────────────────────────
 # Drop each tree into target_user's $HOME with timestamped .bak on conflict.
 [paths.repo]
-plymouth   = "plymouth"           # → /usr/share/plymouth/themes/nokron
+plymouth   = "plymouth"           # → /usr/share/plymouth/themes/omedora
 tuigreet   = "tuigreet"           # → /etc/tuigreet  + /usr/local/bin/tuigreet
 tuigreet_src = ""                 # legacy: path to a pre-cloned Cargo workspace
 hyprland   = "hyprland"           # → $HOME/.config/hypr

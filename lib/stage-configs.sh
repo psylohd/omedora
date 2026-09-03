@@ -1,7 +1,7 @@
 # lib/stage-configs.sh — drop the repo's config trees into the right places.
 #
 # Three destinations:
-#   /usr/share/plymouth/themes/nokron      — Plymouth theme (system)
+#   /usr/share/plymouth/themes/omedora      — Plymouth theme (system)
 #   /etc/tuigreet  + /usr/local/bin/tuigreet — tuigreet binary + config (system)
 #   $HOME/.config/hypr                     — Hyprland user config
 #   $HOME/.config/quickshell               — quickshell/dms user config
@@ -13,43 +13,43 @@
 stage_configs() {
   require_root
 
-  local target_user="${NOKRON_TARGET_USER}"
+  local target_user="${OMEDORA_TARGET_USER}"
   local user_home
   user_home="$(getent passwd "${target_user}" | cut -d: -f6)"
   [[ -n "${user_home}" ]] || die "user '${target_user}' not found on this system"
   [[ -d "${user_home}" ]] || die "user home '${user_home}' does not exist"
 
-  if [[ "${NOKRON_STAGE_PLYMOUTH}" == "true" ]]; then
+  if [[ "${OMEDORA_STAGE_PLYMOUTH}" == "true" ]]; then
     section "configs: plymouth"
     stage_config_plymouth
   fi
 
-  if [[ "${NOKRON_STAGE_TUIGREET}" == "true" ]]; then
+  if [[ "${OMEDORA_STAGE_TUIGREET}" == "true" ]]; then
     section "configs: tuigreet"
     stage_config_tuigreet
   fi
 
-  if [[ "${NOKRON_STAGE_HYPRLAND}" == "true" ]]; then
+  if [[ "${OMEDORA_STAGE_HYPRLAND}" == "true" ]]; then
     section "configs: hyprland"
     stage_config_hyprland "${user_home}"
   fi
 
-  if [[ "${NOKRON_STAGE_QUICKSHELL}" == "true" ]]; then
+  if [[ "${OMEDORA_STAGE_QUICKSHELL}" == "true" ]]; then
     section "configs: quickshell"
     stage_config_quickshell "${user_home}"
   fi
 }
 
 stage_config_plymouth() {
-  local src="${NOKRON_PATH_PLYMOUTH}"
-  local theme="nokron"
+  local src="${OMEDORA_PATH_PLYMOUTH}"
+  local theme="omedora"
   local theme_dir="/usr/share/plymouth/themes/${theme}"
 
   [[ -d "${src}" ]] || die "plymouth source dir not found: ${src}"
 
   install -d "${theme_dir}"
   install -m 0644 \
-    "${src}"/{nokron.plymouth,nokron.script,logo.png,lock.png,entry.png,bullet.png,progress_bar.png,progress_box.png} \
+    "${src}"/{omedora.plymouth,omedora.script,logo.png,lock.png,entry.png,bullet.png,progress_bar.png,progress_box.png} \
     "${theme_dir}/"
 
   if [[ -f "${src}/plymouthd.conf" ]]; then
@@ -69,7 +69,7 @@ stage_config_plymouth() {
 }
 
 stage_config_tuigreet() {
-  local src="${NOKRON_PATH_TUIGREET}"
+  local src="${OMEDORA_PATH_TUIGREET}"
   [[ -d "${src}" ]] || die "tuigreet theme dir not found: ${src}"
 
   # Decide where the Cargo workspace lives. Each branch sets src_src to the
@@ -79,9 +79,9 @@ stage_config_tuigreet() {
   local src_src=""      # absolute path to the Cargo workspace root
   local cleanup=""      # path to remove on exit (empty = nothing to clean)
 
-  if [[ -n "${NOKRON_TUIGREET_REPO_URL}" ]]; then
+  if [[ -n "${OMEDORA_TUIGREET_REPO_URL}" ]]; then
     # New style: clone from a pinned git URL into a scratch dir, build, clean up.
-    [[ -n "${NOKRON_TUIGREET_BRANCH}" ]] \
+    [[ -n "${OMEDORA_TUIGREET_BRANCH}" ]] \
       || die "[vendored.tuigreet].branch is empty — set to e.g. 'tweak'"
     command -v git  >/dev/null 2>&1 || die "git not found. dnf5 install git first."
     command -v cargo >/dev/null 2>&1 || die "cargo not found. Did [packages.build] install fail?"
@@ -89,21 +89,21 @@ stage_config_tuigreet() {
     cleanup="$(mktemp -d)" || die "mktemp failed"
     src_src="${cleanup}/tuigreet"
 
-    info "cloning tuigreet (${NOKRON_TUIGREET_BRANCH})"
-    git clone --depth=1 --branch "${NOKRON_TUIGREET_BRANCH}" \
-      "${NOKRON_TUIGREET_REPO_URL}" "${src_src}" \
-      || die "git clone failed: ${NOKRON_TUIGREET_REPO_URL}"
+    info "cloning tuigreet (${OMEDORA_TUIGREET_BRANCH})"
+    git clone --depth=1 --branch "${OMEDORA_TUIGREET_BRANCH}" \
+      "${OMEDORA_TUIGREET_REPO_URL}" "${src_src}" \
+      || die "git clone failed: ${OMEDORA_TUIGREET_REPO_URL}"
 
-    if [[ -n "${NOKRON_TUIGREET_COMMIT}" ]]; then
-      info "checking out pinned commit ${NOKRON_TUIGREET_COMMIT}"
+    if [[ -n "${OMEDORA_TUIGREET_COMMIT}" ]]; then
+      info "checking out pinned commit ${OMEDORA_TUIGREET_COMMIT}"
       ( cd "${src_src}" && git fetch --unshallow \
-        && git checkout "${NOKRON_TUIGREET_COMMIT}" ) \
+        && git checkout "${OMEDORA_TUIGREET_COMMIT}" ) \
         || die "git checkout failed"
     fi
   else
     # Legacy style: a pre-cloned Cargo workspace already in the repo
-    # (NOKRON_PATH_TUIGREET_SRC). Honour it if it has a Cargo.toml.
-    local legacy_src="${NOKRON_PATH_TUIGREET_SRC:-}"
+    # (OMEDORA_PATH_TUIGREET_SRC). Honour it if it has a Cargo.toml.
+    local legacy_src="${OMEDORA_PATH_TUIGREET_SRC:-}"
     if [[ -z "${legacy_src}" || ! -f "${legacy_src}/Cargo.toml" ]]; then
       die "[vendored.tuigreet].repo_url is empty and [paths.repo].tuigreet_src
 points to a non-Cargo directory. Either:
@@ -120,8 +120,8 @@ points to a non-Cargo directory. Either:
   # promote the path to the environment (so the trap can still see it)
   # and give the trap's expansion an explicit default.
   if [[ -n "${cleanup}" ]]; then
-    export NOKRON_TUIGREET_CLEANUP="${cleanup}"
-    trap 'rm -rf "${NOKRON_TUIGREET_CLEANUP:-}"' RETURN
+    export OMEDORA_TUIGREET_CLEANUP="${cleanup}"
+    trap 'rm -rf "${OMEDORA_TUIGREET_CLEANUP:-}"' RETURN
   fi
 
   [[ -n "${src_src}" && -f "${src_src}/Cargo.toml" ]] \
@@ -138,7 +138,7 @@ points to a non-Cargo directory. Either:
 
   # ── 3. Drop the theme config ───────────────────────────────────────────────
   install -d /etc/tuigreet
-  install -m 0644 "${src}/nokron.theme.toml" /etc/tuigreet/config.toml
+  install -m 0644 "${src}/omedora.theme.toml" /etc/tuigreet/config.toml
   install -m 0755 "${src}/palette.sh"         /etc/tuigreet/palette.sh
   install -m 0644 "${src}/brand.txt"          /etc/tuigreet/brand.txt
 
@@ -151,22 +151,22 @@ points to a non-Cargo directory. Either:
 }
 stage_config_hyprland() {
   local home="$1"
-  local src="${NOKRON_PATH_HYPRLAND}"
+  local src="${OMEDORA_PATH_HYPRLAND}"
 
   [[ -d "${src}" ]] || { warn "hyprland config dir not found: ${src} (skipping)"; return 0; }
 
   backup_and_copy_tree "${src}" "${home}/.config/hypr"
-  chown -R "${NOKRON_TARGET_USER}:${NOKRON_TARGET_USER}" "${home}/.config/hypr"
+  chown -R "${OMEDORA_TARGET_USER}:${OMEDORA_TARGET_USER}" "${home}/.config/hypr"
 }
 
 stage_config_quickshell() {
   local home="$1"
-  local src="${NOKRON_PATH_QUICKSHELL}"
+  local src="${OMEDORA_PATH_QUICKSHELL}"
 
   [[ -d "${src}" ]] || { warn "quickshell config dir not found: ${src} (skipping)"; return 0; }
 
   backup_and_copy_tree "${src}" "${home}/.config/quickshell"
-  chown -R "${NOKRON_TARGET_USER}:${NOKRON_TARGET_USER}" "${home}/.config/quickshell"
+  chown -R "${OMEDORA_TARGET_USER}:${OMEDORA_TARGET_USER}" "${home}/.config/quickshell"
 }
 
 # ── helpers ───────────────────────────────────────────────────────────────────
