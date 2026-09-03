@@ -1,0 +1,195 @@
+#!/bin/bash
+# tweaks.sh — apply individual Nokron tweaks after a full install.
+#
+# `install.sh` is the big entrypoint that runs every stage on a fresh
+# system. This script is the small, surgical counterpart: pick one tweak,
+# apply it, see if you like it, roll back if not.
+#
+# Each tweak delegates to the matching lib/stage-*.sh function used by
+# install.sh, so the two scripts share identical logic — tweak outcomes
+# match full-install outcomes 1:1.
+#
+# Usage:
+#   sudo ./tweaks.sh                     # list available tweaks
+#   sudo ./tweaks.sh plymouth            # re-apply Plymouth nokron theme
+#   sudo ./tweaks.sh tuigreet            # rebuild + reinstall tuigreet
+#   sudo ./tweaks.sh greetd              # rewrite /etc/greetd/config.toml
+#   sudo ./tweaks.sh hyprland            # redeploy ~/.config/hypr/
+#   sudo ./tweaks.sh quickshell          # redeploy ~/.config/quickshell/
+#   sudo ./tweaks.sh dms                 # redeploy DankMaterialShell config + plugins
+#   sudo ./tweaks.sh services            # systemctl enable + set-default
+#   sudo ./tweaks.sh --list              # same as no args
+#   sudo ./tweaks.sh --diff <name>       # show what would change vs current state
+#   sudo ./tweaks.sh --revert <name>     # restore .bak.<date> backups for a tweak
+#
+# Backup convention: every config-deploy stage writes timestamped .bak
+# files alongside overwritten targets (see lib/parser.sh's backup_and_*).
+# `--revert <name>` restores the most recent .bak for every file that
+# stage <name> would have touched.
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export NOKRON_REPO_ROOT="${SCRIPT_DIR}"
+export NOKRON_CONFIG="${NOKRON_CONFIG:-${SCRIPT_DIR}/nokron.toml}"
+
+source "${SCRIPT_DIR}/lib/parser.sh"
+source "${SCRIPT_DIR}/lib/self-check.sh"
+
+load_config
+
+# ── Tweaks registry ──────────────────────────────────────────────────────────
+# Each entry: name → bash function that performs the tweak.
+declare -A TWEAK_FN=(
+  [plymouth]=tweak_plymouth
+  [tuigreet]=tweak_tuigreet
+  [greetd]=tweak_greetd
+  [hyprland]=tweak_hyprland
+  [quickshell]=tweak_quickshell
+  [dms]=tweak_dms
+  [services]=tweak_services
+)
+declare -A TWEAK_DESC=(
+  [plymouth]="Plymouth nokron theme (script module)"
+  [tuigreet]="Rebuild + install tuigreet from [vendored.tuigreet]"
+  [greetd]="Wire /etc/greetd/config.toml + /usr/local/bin/start-hyprland"
+  [hyprland]="Deploy hyprland/ → ~/.config/hypr/"
+  [quickshell]="Deploy quickshell/ → ~/.config/quickshell/"
+  [dms]="Deploy DankMaterialShell/ + install plugins from [dms_plugins]"
+  [services]="systemctl enable + set-default graphical.target"
+)
+
+list_tweaks() {
+  echo "Available tweaks:"
+  for name in "${!TWEAK_FN[@]}"; do
+    printf "  %-12s %s\n" "${name}" "${TWEAK_DESC[${name}]}"
+  done
+  echo
+  echo "Use './tweaks.sh <name>' to apply, '--diff <name>' to preview, '--revert <name>' to undo."
+}
+
+# ── Each tweak wraps the matching install.sh stage logic ─────────────────────
+# We re-source the lib/ scripts lazily so this file stays small and the
+# logic lives in one place (the stages).
+
+source "${SCRIPT_DIR}/lib/stage-copr.sh"
+source "${SCRIPT_DIR}/lib/stage-dnf.sh"
+source "${SCRIPT_DIR}/lib/stage-vendor.sh"
+source "${SCRIPT_DIR}/lib/stage-configs.sh"
+source "${SCRIPT_DIR}/lib/stage-greetd.sh"
+source "${SCRIPT_DIR}/lib/stage-services.sh"
+source "${SCRIPT_DIR}/lib/stage-flatpak.sh"
+source "${SCRIPT_DIR}/lib/stage-dms.sh"
+
+tweak_plymouth()   { section "tweak: plymouth";   stage_config_plymouth; }
+tweak_tuigreet()   { section "tweak: tuigreet";   stage_config_tuigreet; }
+tweak_greetd()     { section "tweak: greetd";     stage_greetd; }
+tweak_hyprland()   {
+  local home; home="$(getent passwd "${NOKRON_TARGET_USER}" | cut -d: -f6)"
+  section "tweak: hyprland"
+  stage_config_hyprland "${home}"
+}
+tweak_quickshell() {
+  local home; home="$(getent passwd "${NOKRON_TARGET_USER}" | cut -d: -f6)"
+  section "tweak: quickshell"
+  stage_config_quickshell "${home}"
+}
+tweak_dms()        { section "tweak: dms";        stage_dms; }
+tweak_services()   { section "tweak: services";   stage_services; }
+
+# ── --diff: preview what the tweak would do (no writes) ──────────────────────
+# Currently a stub: each stage would need to support --dry-run. Today this
+# falls back to "all config files would be overwritten with .bak backups."
+tweak_diff() {
+  local name="$1"
+  echo "(diff stub) — would overwrite files in:"
+  case "${name}" in
+    plymouth)
+      echo "  /usr/share/plymouth/themes/nokron/"
+      echo "  /etc/plymouth/plymouthd.conf" ;;
+    tuigreet)
+      echo "  /usr/local/bin/tuigreet"
+      echo "  /etc/tuigreet/{config.toml,palette.sh,brand.txt}" ;;
+    greetd)
+      echo "  /etc/greetd/config.toml"
+      echo "  /usr/local/bin/start-hyprland" ;;
+    hyprland)
+      echo "  ~${NOKRON_TARGET_USER}/.config/hypr/" ;;
+    quickshell)
+      echo "  ~${NOKRON_TARGET_USER}/.config/quickshell/" ;;
+    dms)
+      echo "  ~${NOKRON_TARGET_USER}/.config/DankMaterialShell/" ;;
+    services)
+      echo "  systemctl enable greetd plymouth-start"
+      echo "  systemctl set-default graphical.target" ;;
+    *) die "unknown tweak: ${name}" ;;
+  esac
+  echo "Existing files would be backed up with timestamped .bak suffixes."
+}
+
+# ── --revert: restore most recent .bak for every file in the affected paths ─
+tweak_revert() {
+  local name="$1"
+  local paths=()
+  case "${name}" in
+    plymouth) paths=(/usr/share/plymouth/themes/nokron /etc/plymouth/plymouthd.conf) ;;
+    tuigreet) paths=(/usr/local/bin/tuigreet /etc/tuigreet) ;;
+    greetd)   paths=(/etc/greetd/config.toml /usr/local/bin/start-hyprland) ;;
+    hyprland)
+      local h; h="$(getent passwd "${NOKRON_TARGET_USER}" | cut -d: -f6)"
+      paths=("${h}/.config/hypr") ;;
+    quickshell)
+      local h; h="$(getent passwd "${NOKRON_TARGET_USER}" | cut -d: -f6)"
+      paths=("${h}/.config/quickshell") ;;
+    dms)
+      local h; h="$(getent passwd "${NOKRON_TARGET_USER}" | cut -d: -f6)"
+      paths=("${h}/.config/DankMaterialShell") ;;
+    services)
+      warn "--revert doesn't apply to services (use systemctl disable + set-default)" ; return 0 ;;
+    *) die "unknown tweak: ${name}" ;;
+  esac
+
+  for base in "${paths[@]}"; do
+    if [[ ! -e "${base}" ]]; then continue; fi
+    # Find most recent .bak.<date> sibling(s) — either at the same path or
+    # any descendant. Restore each by copying back.
+    find "${base}" -name '*.bak.*' 2>/dev/null | sort -r | while read -r bak; do
+      local target="${bak%.bak.*}"
+      if [[ -f "${bak}" ]]; then
+        info "reverting ${target} from ${bak}"
+        cp -p "${bak}" "${target}"
+      fi
+    done
+  done
+  info "revert complete — restart greetd / re-login to pick up changes"
+}
+
+# ── CLI ──────────────────────────────────────────────────────────────────────
+# Read-only ops (--list, --diff, --revert) don't need root. The tweak
+# functions (e.g. tweak_plymouth) call require_root themselves.
+
+if [[ $# -eq 0 || "${1:-}" == "--list" || "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+  list_tweaks
+  exit 0
+fi
+
+case "${1:-}" in
+  --diff)
+    tweak_diff "$2" ;;
+  --revert)
+    [[ $# -ge 2 ]] || die "--revert requires a tweak name"
+    tweak_revert "$2" ;;
+  --*)
+    echo "unknown flag: $1" >&2
+    list_tweaks >&2
+    exit 2 ;;
+  *)
+    name="$1"
+    if [[ -z "${TWEAK_FN[${name}]+x}" ]]; then
+      echo "unknown tweak: ${name}" >&2
+      list_tweaks >&2
+      exit 2
+    fi
+    info "applying tweak: ${name}"
+    "${TWEAK_FN[${name}]}" ;;
+esac

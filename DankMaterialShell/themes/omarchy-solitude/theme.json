@@ -1,0 +1,29 @@
+{
+  "id": "omarchy-solitude",
+  "name": "Omarchy Solitude",
+  "version": "1.0.0",
+  "author": "Avenge Media / ported from omacom/omarchy",
+  "description": "Muted, moody greyscale with warm undertones from the Omarchy Solitude theme, including all 5 official backgrounds",
+  "dark": {
+    "primary": "#798186",
+    "primaryText": "#080a0b",
+    "primaryContainer": "#222528",
+    "secondary": "#aeaeae",
+    "surface": "#101315",
+    "surfaceText": "#cacccc",
+    "surfaceVariant": "#4b4e55",
+    "surfaceVariantText": "#cbc2be",
+    "surfaceTint": "#798186",
+    "background": "#080a0b",
+    "backgroundText": "#cacccc",
+    "outline": "#4b4e55",
+    "surfaceContainerLowest": "#080a0b",
+    "surfaceContainerLow": "#0c0e10",
+    "surfaceContainer": "#101315",
+    "surfaceContainerHigh": "#4b4e55",
+    "surfaceContainerHighest": "#4b4e55",
+    "error": "#de6145",
+    "warning": "#d9dbdc",
+    "info": "#707070"
+  }
+}

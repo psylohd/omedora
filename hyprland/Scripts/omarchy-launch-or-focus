@@ -1,0 +1,18 @@
+#!/bin/bash
+# Launch an application or focus its existing window if already running.
+# Usage: omarchy-launch-or-focus <class-regex> <command> [args...]
+
+class="$1"
+shift
+
+if [[ -z $class || -z $* ]]; then
+  exit 1
+fi
+
+if hyprctl clients -j | jq -e --arg cls "$class" \
+    '.[] | select(.class | test($cls; "i"))' >/dev/null 2>&1; then
+  hyprctl dispatch focuswindow "class:${class}" >/dev/null
+else
+  "$@" >/dev/null 2>&1 &
+  disown
+fi

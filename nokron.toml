@@ -1,0 +1,161 @@
+# nokron.toml — single source of truth for the Fedora post-install.
+#
+# fedora_install.sh reads this. Every section corresponds to a stage of the
+# installer. Edit a list, re-run the script, get the same outcome.
+#
+# Conventions:
+#   - All package names are dnf5 package names.
+#   - COPR identifiers are Fedorahosted COPR short names: "owner/name".
+#   - Vendored binaries are downloaded from a pinned GitHub release with a
+#     per-binary sha256 manifest; this is how we avoid `curl|bash`.
+#   - Paths under [paths] are relative to the repo root unless absolute.
+#   - User `target_user` is the desktop user (NOT root). Most configs land
+#     under $HOME.
+
+# ── Identity ──────────────────────────────────────────────────────────────────
+[meta]
+name        = "nokron"
+description = "Minimal Fedora + Hyprland + dms + curated apps"
+target_user = ""                  # REQUIRED: set to the desktop user account.
+
+# ── Repositories ──────────────────────────────────────────────────────────────
+[coprs]
+enable = [
+  "lionheartp/Hyprland",          # the Hyprland stack on Fedora 43/44/45
+  "leloubil/wl-clip-persist",     # Wayland clipboard persistence
+  "tofik/nwg-shell",              # nwg-look + nwg-displays
+]
+
+# ── Packages ──────────────────────────────────────────────────────────────────
+[packages.hyprland]
+# All from lionheartp/Hyprland COPR (must be enabled first).
+core = [
+  "hyprland", "aquamarine", "hyprcursor", "hyprgraphics", "hyprutils",
+  "hyprlang", "hyprland-protocols", "hyprland-qt-support",
+  "hyprland-guiutils",            # successor to deprecated hyprland-qtutils
+  "hyprpolkitagent", "xdg-desktop-portal-hyprland", "hyprwayland-scanner",
+  "hyprpaper", "hyprlock", "hypridle", "hyprshot", "hyprpicker",
+  "hyprsunset", "hyprsysteminfo", "hyprlauncher", "hyprshutdown",
+]
+
+[packages.quickshell]
+# All from official Fedora. quickshell 0.2.1 ships in F44.
+runtime = [
+  "quickshell",
+  "qt6-qtbase", "qt6-qtdeclarative", "qt6-qtsvg",
+  "qt6-qtimageformats", "qt6-qtmultimedia",
+  "qt6-qt5compat",                 # MultiEffect blur
+  "qt6-qtwayland",                 # Qt Wayland backend
+  "polkit",
+]
+# ── Build toolchain ──────────────────────────────────────────────────────────
+# Required to build tuigreet from source at install time. Not strictly
+# needed on the deployed system once tuigreet is built; can be removed
+# later with `dnf remove rust cargo` if you want a leaner system.
+[packages.build]
+required = [
+  "rust",                           # rustc + cargo, official Fedora (1.98.x in F44)
+  "cargo",
+]
+
+# ── Vendored binaries (replaces curl|bash for projects that lag in COPRs) ─────
+
+[packages.apps]
+# Official Fedora unless marked.
+required = [
+  # Files / viewing
+  "nautilus",                       # GNOME Files
+  "gnome-disk-utility",             # GNOME Disks
+  "loupe",                          # GNOME image viewer
+  "gnome-text-editor",              # GNOME Text Editor
+  # Wayland helpers
+  "xwayland-satellite",             # rootless Xwayland
+  # Login stack
+  "greetd", "accountsservice", "polkit",
+  # Audio
+  "pipewire", "pipewire-pulseaudio", "wireplumber",
+  "pavucontrol",
+  # Power / night light / clipboard
+  "power-profiles-daemon", "wlsunset",
+  # Portals / XDG
+  "xdg-desktop-portal-gtk", "xdg-user-dirs",
+  # Shell + tools
+  "fish", "fastfetch", "grim", "slurp",
+  "kitty", "kitty-terminfo", "kitty-shell-integration", "qt6ct",
+  "playerctl", "gnome-keyring",
+  # Boot splash
+  "plymouth", "plymouth-plugin-script",   # plugin-script is required by nokron theme
+]
+
+optional_copr = [
+  "wl-clip-persist",                # from leloubil/wl-clip-persist
+  "gpu-screen-recorder",            # from lionheartp/Hyprland COPR
+  "nwg-look", "nwg-displays",       # from tofik/nwg-shell
+]
+
+
+# ── Vendored binaries + tuigreet source ─────────────────────────────────────
+# dms lives in avengemedia/danklinux COPR but the version is too old. We
+# instead pin a specific upstream GitHub release. The installer downloads
+# the named bins without verifying signatures — this is a personal
+# postinstall script, not a production tool. Treat the download like any
+# other curl|bash: review the source first, accept the risk.
+[vendored.dms]
+version  = "1.5.4"                 # ← bump here to upgrade dms
+base_url = "https://github.com/AvengeMedia/DankMaterialShell/releases/download"
+bins    = ["dms", "dgop"]
+install_dir = "/usr/local/bin"
+
+# tuigreet: cloned from a public git repo (your fork), checked out on a
+# branch (or pinned commit), built with cargo.
+[vendored.tuigreet]
+repo_url    = "https://github.com/psylohd/tuigreet.git"
+branch      = "tweak"
+commit      = ""               # ← optional: pin to a specific commit
+# If empty, it just checks out the branch tip.
+[flatpak]
+system = [
+  "app.zen_browser.zen",            # Zen Browser (not in any dnf repo)
+]
+user = [
+  # Add user-scope Flatpaks here.
+]
+# ── DMS plugins ───────────────────────────────────────────────────────────────
+# dms plugin install <source> for each. Use a git URL or a known registry
+# entry. Plugins are NOT shipped in the repo (kept out for size + hygiene);
+# the dms stage installs them at deploy time.
+[dms_plugins]
+plugins = [
+  # "https://github.com/your-fork/wallpaperCarousel",
+  # "https://github.com/your-fork/homeAssistantMonitor",
+]
+# ── Config trees ──────────────────────────────────────────────────────────────
+# Drop each tree into target_user's $HOME with timestamped .bak on conflict.
+[paths.repo]
+plymouth   = "plymouth"           # → /usr/share/plymouth/themes/nokron
+tuigreet   = "tuigreet"           # → /etc/tuigreet  + /usr/local/bin/tuigreet
+tuigreet_src = ""                 # legacy: path to a pre-cloned Cargo workspace
+hyprland   = "hyprland"           # → $HOME/.config/hypr
+dms        = "DankMaterialShell"  # → $HOME/.config/DankMaterialShell
+quickshell = "quickshell"         # → $HOME/.config/quickshell (dms wraps this)
+# ── System services ───────────────────────────────────────────────────────────
+[services]
+enable = [
+  "greetd.service",
+  "plymouth-start.service",        # bootsplash on graphical.target
+]
+set_default = "graphical.target"
+
+# ── Stage toggles ─────────────────────────────────────────────────────────────
+# Comment any of these out to skip a stage (useful for re-runs / debugging).
+[stages]
+copr      = true
+dnf       = true
+vendor    = true
+flatpak   = true
+plymouth  = true
+tuigreet  = true
+hyprland  = true
+quickshell = true
+dms        = true
+services   = true
