@@ -31,13 +31,16 @@ enable = [
 # All from lionheartp/Hyprland COPR (must be enabled first).
 core = [
   "hyprland", "aquamarine", "hyprcursor", "hyprgraphics", "hyprutils",
-  "hyprlang", "hyprland-protocols", "hyprland-qt-support",
-  "hyprland-guiutils",            # successor to deprecated hyprland-qtutils
-  "hyprpolkitagent", "xdg-desktop-portal-hyprland", "hyprwayland-scanner",
+  "hyprlang", "hyprland-qt-support",
+  "hyprland-guiutils",
+  "hyprpolkitagent", "xdg-desktop-portal-hyprland",
+  # hyprland-protocols + hyprwayland-scanner dropped — both are src-only in
+  # the COPR (no installable x86_64 binary). hyprwayland-scanner ships
+  # inside the hyprland RPM at /usr/bin/hyprwayland-scanner; hyprland-
+  # protocols isn't strictly needed for our config.
   "hyprpaper", "hyprlock", "hypridle", "hyprshot", "hyprpicker",
   "hyprsunset", "hyprsysteminfo", "hyprlauncher", "hyprshutdown",
 ]
-
 [packages.quickshell]
 # All from official Fedora. quickshell 0.2.1 ships in F44.
 runtime = [
