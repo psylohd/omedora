@@ -141,15 +141,19 @@ tuigreet_src = ""                 # legacy: path to a pre-cloned Cargo workspace
 hyprland   = "hyprland"           # → $HOME/.config/hypr
 dms        = "DankMaterialShell"  # → $HOME/.config/DankMaterialShell
 quickshell = "quickshell"         # → $HOME/.config/quickshell (dms wraps this)
-# ── System services ───────────────────────────────────────────────────────────
-[services]
-enable = [
-  "greetd.service",
-  "plymouth-start.service",        # bootsplash on graphical.target
-]
-set_default = "graphical.target"
 
-# ── Stage toggles ─────────────────────────────────────────────────────────────
+# ── Greeter ───────────────────────────────────────────────────────────────────
+# backend = "tuigreet"     — current Rust build under [vendored.tuigreet]
+# backend = "dms-greeter"  — vendored binary (not currently shipped)
+# session = the absolute path to start-hyprland. We install our wrapper
+# (with env exports + dbus sourcing) at /usr/local/bin/start-hyprland;
+# the Hyprland RPM ships a bare binary at /usr/bin/start-hyprland that
+# just exec's Hyprland with no env. Always use the /usr/local/bin version.
+[greeter]
+backend  = "tuigreet"
+session  = "/usr/local/bin/start-hyprland"
+
+# ── System services ───────────────────────────────────────────────────────────
 # Comment any of these out to skip a stage (useful for re-runs / debugging).
 [stages]
 copr      = true
