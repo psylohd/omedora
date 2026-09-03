@@ -4,12 +4,12 @@
 #   tuigreet      — current Rust build under [vendored.tuigreet]
 #   dms-greeter   — vendored binary (not currently shipped)
 #
-# Both backends exec /usr/bin/start-hyprland (the binary shipped by the
-# Hyprland RPM). We do NOT install a /usr/local/bin wrapper — the Hyprland
-# startup hook + dbus-update-activation-environment set XDG_CURRENT_DESKTOP
-# etc. before exec-once fires `dms run`, so env vars reach dms without a
-# custom launcher.
-
+# Both backends exec into `uwsm start /usr/bin/start-hyprland`. Bare
+# `hyprland` skips the env-setup wrapper that `start-hyprland` provides
+# (XDG_CURRENT_DESKTOP etc.), which Hyprland rejects on startup. uwsm
+# validates the Wayland/D-Bus environment, activates
+# `graphical-session.target` (so dms.service's `Requisite=` is
+# satisfied), then execs start-hyprland.
 stage_greetd() {
   require_root
   section "greetd: wiring ${OMEDORA_GREETER_BACKEND}"
@@ -33,7 +33,7 @@ stage_greetd() {
 vt = 1
 
 [default_session]
-command = "sh -c '. /etc/tuigreet/palette.sh; exec tuigreet --cmd /usr/bin/start-hyprland'"
+command = "sh -c '. /etc/tuigreet/palette.sh; exec tuigreet --cmd \"uwsm start /usr/bin/start-hyprland\"'"
 user = "greetd"
 GREETD_EOF
       ;;
@@ -43,7 +43,7 @@ GREETD_EOF
 vt = 1
 
 [default_session]
-command = "dms-greeter --command /usr/bin/start-hyprland"
+command = "dms-greeter --command \"uwsm start /usr/bin/start-hyprland\""
 user = "greetd"
 GREETD_EOF
       ;;
