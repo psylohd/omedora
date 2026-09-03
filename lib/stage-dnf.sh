@@ -52,8 +52,42 @@ stage_dnf() {
   info "installing DMS (dms-cli from avengemedia/dms COPR; dms-greeter excluded)"
   local dms_opts=( "${copr_flags[@]}" )
   [[ "${OMEDORA_DMS_WEAK_DEPS}" == "false" ]] && dms_opts+=( --setopt=install_weak_deps=False )
-  dnf5 -y install "${dms_opts[@]}" --exclude dms-greeter dms \
-    || die "dms install failed"
+  # Retry loop: the avengemedia/dms COPR occasionally writes a cached RPM
+  # that fails rpmReadPackageFile() at transaction time even though the
+  # download itself reports success ("Already downloaded" but the file
+  # can't be opened). On failure, nuke the package + solv cache for that
+  # repo and retry up to 3 times. Last attempt dumps rpm -K output before
+  # dying so the failure mode is debuggable.
+  local dms_cache_dir
+  dms_cache_dir="$(ls -d /var/cache/libdnf5/copr:copr.fedorainfracloud.org:avengemedia:dms-* 2>/dev/null | head -1 || true)"
+  local dms_attempt=1 dms_rc=0
+  while (( dms_attempt <= 3 )); do
+    # Force re-download on every attempt: scrub cached RPMs + solv index
+    # so dnf5 has to re-fetch from the COPR mirror. Without this, dnf5
+    # trusts its package cache and reuses the corrupt file.
+    if [[ -n "${dms_cache_dir}" ]]; then
+      rm -f "${dms_cache_dir}"/packages/*.rpm 2>/dev/null || true
+      rm -f "${dms_cache_dir}"/solv/* 2>/dev/null || true
+    fi
+    dnf5 -y install "${dms_opts[@]}" --exclude dms-greeter dms
+    dms_rc=$?
+    if (( dms_rc == 0 )); then
+      break
+    fi
+    warn "dms install attempt ${dms_attempt}/3 failed (rc=${dms_rc})"
+    dms_attempt=$(( dms_attempt + 1 ))
+  done
+  if (( dms_rc != 0 )); then
+    if [[ -n "${dms_cache_dir}" && -d "${dms_cache_dir}/packages" ]]; then
+      local pkg; pkg="$(ls "${dms_cache_dir}/packages/"*.rpm 2>/dev/null | head -1 || true)"
+      if [[ -n "${pkg}" ]]; then
+        warn "rpm -K on cached RPM: $(rpm -K "${pkg}" 2>&1)"
+        warn "size: $(stat -c '%s bytes' "${pkg}")"
+        warn "file: $(file "${pkg}")"
+      fi
+    fi
+    die "dms install failed after 3 attempts"
+  fi
 
   info "installing required apps (${#OMEDORA_APPS[@]} packages)"
   if [[ ${#OMEDORA_APPS[@]} -gt 0 ]]; then
