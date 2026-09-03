@@ -103,7 +103,8 @@ emit("NOKRON_FLATPAK_USER", fp.get("user", []))
 # greeter
 g = cfg.get("greeter", {})
 emit("NOKRON_GREETER_BACKEND", g.get("backend", "tuigreet"))
-emit("NOKRON_GREETER_SESSION", g.get("session", "/usr/bin/start-hyprland"))
+# NOKRON_GREETER_SESSION removed — the greetd config hardcodes the path
+# (always /usr/bin/start-hyprland, the Hyprland RPM wrapper).
 # paths
 def repo_abs(rel):
     if not rel:

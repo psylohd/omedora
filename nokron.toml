@@ -145,16 +145,25 @@ quickshell = "quickshell"         # → $HOME/.config/quickshell (dms wraps this
 # ── Greeter ───────────────────────────────────────────────────────────────────
 # backend = "tuigreet"     — current Rust build under [vendored.tuigreet]
 # backend = "dms-greeter"  — vendored binary (not currently shipped)
-# session = the absolute path to start-hyprland. We install our wrapper
-# (with env exports + dbus sourcing) at /usr/local/bin/start-hyprland;
-# the Hyprland RPM ships a bare binary at /usr/bin/start-hyprland that
-# just exec's Hyprland with no env. Always use the /usr/local/bin version.
+#
+# The exact command + user are hardcoded in lib/stage-greetd.sh so the
+# installed greetd config matches what the Hyprland RPM expects to launch
+# (i.e. /usr/bin/start-hyprland, which the RPM ships). If you ever want
+# to point greetd at a custom launcher, edit stage-greetd.sh directly.
 [greeter]
-backend  = "tuigreet"
-session  = "/usr/local/bin/start-hyprland"
-
+backend = "tuigreet"
 # ── System services ───────────────────────────────────────────────────────────
-# Comment any of these out to skip a stage (useful for re-runs / debugging).
+# Stage services to systemctl enable after install. The greetd stage wires
+# the config file; this section just turns on the systemd unit. plymouth-start
+# brings up the bootsplash, greetd brings up the login.
+[services]
+enable = [
+  "greetd.service",
+  "plymouth-start.service",
+]
+set_default = "graphical.target"
+
+# ── Stage toggles ─────────────────────────────────────────────────────────────
 [stages]
 copr      = true
 dnf       = true
