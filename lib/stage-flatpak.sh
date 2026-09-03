@@ -1,8 +1,10 @@
 # lib/stage-flatpak.sh — install Flatpak apps from nokron.toml.
 #
 # Zen Browser is the obvious one: not in any dnf repo, lives on Flathub.
-# Flathub is added once. System-scope installs use --system; user-scope
-# uses --user (no root required for those, but we are root anyway).
+# Flathub is added once. System-scope installs use --system (run as root,
+# land in /var/lib/flatpak). User-scope installs use --user and MUST be
+# invoked as the desktop user (sudo -u) so they land in their own
+# ~/.local/share/flatpak, not /root's.
 
 stage_flatpak() {
   require_root
@@ -25,8 +27,17 @@ stage_flatpak() {
   fi
 
   if [[ ${#NOKRON_FLATPAK_USER[@]} -gt 0 ]]; then
-    info "installing ${#NOKRON_FLATPAK_USER[@]} user Flatpak(s)"
-    flatpak install -y --user --noninteractive flathub "${NOKRON_FLATPAK_USER[@]}" \
+    if ! id "${NOKRON_TARGET_USER}" >/dev/null 2>&1; then
+      die "user-scope flatpaks configured but target_user '${NOKRON_TARGET_USER}' does not exist"
+    fi
+    info "installing ${#NOKRON_FLATPAK_USER[@]} user Flatpak(s) as ${NOKRON_TARGET_USER}"
+    # `sudo -u foo` without -H keeps $HOME=root's, which would land the
+    # install in /root/.local/share/flatpak. Set HOME explicitly so
+    # `flatpak --user` writes to the target user's flatpak dir.
+    local user_home
+    user_home="$(getent passwd "${NOKRON_TARGET_USER}" | cut -d: -f6)"
+    sudo -u "${NOKRON_TARGET_USER}" env HOME="${user_home}" \
+      flatpak install -y --user --noninteractive flathub "${NOKRON_FLATPAK_USER[@]}" \
       || warn "user Flatpak install had failures (continuing)"
   fi
 }

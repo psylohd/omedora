@@ -30,6 +30,7 @@ self_check() {
     die "home directory '${home}' does not exist for ${NOKRON_TARGET_USER}"
   fi
   info "target user: ${NOKRON_TARGET_USER} (home=${home})"
+  # 3. Plymouth script plugin. If plymouth is missing the script-plugin is
   #    missing and the plymouth stage is enabled, install it now rather
   #    than aborting — much friendlier when running on a fresh server.
   if ! rpm -q plymouth-plugin-script >/dev/null 2>&1; then

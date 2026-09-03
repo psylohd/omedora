@@ -128,14 +128,14 @@ apply_stage_filter() {
 if [[ -n "${SKIP}" ]]; then
   IFS=',' read -ra list <<< "${SKIP}"
   for s in "${list[@]}"; do
-    local var="NOKRON_STAGE_${s^^}"
+    var="NOKRON_STAGE_${s^^}"
     printf -v "${var}" "false"
   done
 fi
 
 
 if ! command -v dnf5 >/dev/null 2>&1; then
-  die "dnf5 not found — this installer targets Fedora Server. (Did you mean install.sh?)"
+  die "dnf5 not found — this installer targets Fedora Server."
 fi
 if ! grep -q '^ID=fedora' /etc/os-release 2>/dev/null; then
   warn "this doesn't look like Fedora (/etc/os-release ID != fedora). Continuing anyway."
@@ -173,7 +173,7 @@ if ${DRY_RUN}; then
   exit 0
 fi
 # ── Self-check (before destructive work) ─────────────────────────────────────
-
+self_check
 # ── Run stages ────────────────────────────────────────────────────────────────
 run_stage copr       stage_copr
 run_stage dnf        stage_dnf

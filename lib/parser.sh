@@ -123,6 +123,16 @@ emit("NOKRON_PATH_QUICKSHELL", repo_abs(p.get("quickshell", "quickshell")))
 # dms plugins
 dp = cfg.get("dms_plugins", {})
 emit("NOKRON_DMS_PLUGINS", dp.get("plugins", []))
+emit("NOKRON_DMS_REGISTRY", dp.get("registry", []))
+
+# dankinstall (headless mode for the vendored upstream installer)
+di = cfg.get("dankinstall", {})
+emit("NOKRON_DANKINSTALL_COMPOSITOR", di.get("compositor", "hyprland"))
+emit("NOKRON_DANKINSTALL_TERMINAL",   di.get("terminal",   "ghostty"))
+emit("NOKRON_DANKINSTALL_REPLACE_CONFIGS", di.get("replace_configs", []))
+emit("NOKRON_DANKINSTALL_INCLUDE_DEPS",    di.get("include_deps", []))
+emit("NOKRON_DANKINSTALL_EXCLUDE_DEPS",    di.get("exclude_deps", []))
+emit("NOKRON_DANKINSTALL_YES", str(bool(di.get("yes", True))).lower())
 
 # services
 svc = cfg.get("services", {})

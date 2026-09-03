@@ -84,7 +84,7 @@ required = [
   "xdg-desktop-portal-gtk", "xdg-user-dirs",
   # Shell + tools
   "fish", "fastfetch", "grim", "slurp",
-  "kitty", "kitty-terminfo", "kitty-shell-integration", "qt6ct",
+  "ghostty", "qt6ct",
   "playerctl", "gnome-keyring",
   # Boot splash
   "plymouth", "plymouth-plugin-script",   # plugin-script is required by nokron theme
@@ -117,20 +117,29 @@ branch      = "tweak"
 commit      = ""               # ← optional: pin to a specific commit
 # If empty, it just checks out the branch tip.
 [flatpak]
-system = [
-  "app.zen_browser.zen",            # Zen Browser (not in any dnf repo)
-]
+# Per-user browsers (Zen) live under `user` so they install into
+# ~/.local/share/flatpak, are owned by the desktop user, and don't
+# bleed into other accounts. Use `system` only for things every user
+# on the box genuinely needs (codecs, fonts, system helpers).
+system = []
 user = [
-  # Add user-scope Flatpaks here.
+  "app.zen_browser.zen",            # Zen Browser (not in any dnf repo)
 ]
 # ── DMS plugins ───────────────────────────────────────────────────────────────
 # dms plugin install <source> for each. Use a git URL or a known registry
 # entry. Plugins are NOT shipped in the repo (kept out for size + hygiene);
 # the dms stage installs them at deploy time.
 [dms_plugins]
+# `plugins`     — git URLs (any branch). The dms stage clones + symlinks.
+# `registry`    — plugin IDs from https://github.com/AvengeMedia/dms-plugin-registry
+#                  (e.g. "dankQuickSearch"). Installed via `dms plugins install <id>`.
 plugins = [
   # "https://github.com/your-fork/wallpaperCarousel",
   # "https://github.com/your-fork/homeAssistantMonitor",
+]
+registry = [
+  "dankQuickSearch",   # alcxyz/DankQuickSearch
+  "dankCalendar",      # alcxyz/DankCalendar
 ]
 # ── Config trees ──────────────────────────────────────────────────────────────
 # Drop each tree into target_user's $HOME with timestamped .bak on conflict.
@@ -142,6 +151,19 @@ hyprland   = "hyprland"           # → $HOME/.config/hypr
 dms        = "DankMaterialShell"  # → $HOME/.config/DankMaterialShell
 quickshell = "quickshell"         # → $HOME/.config/quickshell (dms wraps this)
 
+
+# ── DankInstall (headless) ────────────────────────────────────────────────────
+# Drives the vendored upstream installer (lib/vendor/danklinux-install.sh) in
+# unattended mode. Every flag here maps 1:1 to a `dankinstall` CLI flag.
+# Leave `replace_configs` set to ensure our config tree wins over the
+# installer's defaults; otherwise it leaves existing configs alone.
+[dankinstall]
+compositor      = "hyprland"          # -c: hyprland | niri
+terminal        = "ghostty"           # -t: ghostty | kitty | alacritty
+replace_configs = ["hyprland", "ghostty"]   # replace just our compositor + term
+exclude_deps    = ["dms-greeter"]     # don't install the greetd greeter
+include_deps    = []                  # opt-in extra deps (empty = defaults)
+yes             = true                # -y: required for headless mode
 # ── Greeter ───────────────────────────────────────────────────────────────────
 # backend = "tuigreet"     — current Rust build under [vendored.tuigreet]
 # backend = "dms-greeter"  — vendored binary (not currently shipped)
