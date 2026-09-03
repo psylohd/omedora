@@ -96,21 +96,28 @@ stage_vendor() {
     fi
 
     # ── Sudo credential cache for the target user ──────────────────────
-    # The runner autodetects the priv-esc tool (sudo/doas/run0) and then
-    # calls `privesc.CheckCached()` which runs `sudo -n true` non-interactively
-    # under the target user's identity. If the target user doesn't have a
-    # cached sudo credential AND doesn't have passwordless sudo, the
-    # runner aborts mid-install with a clear error.
-    #
-    # `sudo -v` as the target user primes their cache. If the target user
-    # has passwordless sudo in /etc/sudoers, this is instant. Otherwise
-    # we have to fall back to a password prompt — which is interactive
-    # and defeats "no user interaction". Detect that case and warn.
-    info "priming sudo credential cache for ${NOKRON_TARGET_USER}"
+    # The runner's `privesc.CheckCached()` runs `sudo -n true` under
+    # target_user's identity and aborts mid-install if it fails. The
+    # self_check stage drops a NOPASSWD sudoers file by default; if
+    # that didn't happen (either because [sudo].passwordless=false or
+    # because the file wasn't writable), the install will fail with a
+    # confusing "sudo auth required" error. Check upfront and die with
+    # a clear message so the user can fix it instead of waiting for
+    # the runner to bail at an arbitrary point.
     if ! sudo -u "${NOKRON_TARGET_USER}" sudo -n true 2>/dev/null; then
-      warn "${NOKRON_TARGET_USER} does not have passwordless sudo"
-      warn "you'll be prompted for their password during the install"
-      warn "or run: sudo -u ${NOKRON_TARGET_USER} sudo -v  (then re-run this stage)"
+      die "${NOKRON_TARGET_USER} cannot run sudo non-interactively.
+
+  The vendored dms installer needs cached sudo credentials for
+  ${NOKRON_TARGET_USER} (it calls sudo internally for dnf/copr).
+  Self-check did not (or could not) set this up.
+
+  Fix: either re-enable [sudo].passwordless = true in nokron.toml and
+  re-run, or pre-cache the user's creds before re-running:
+    sudo -u ${NOKRON_TARGET_USER} sudo -v
+  Or grant NOPASSWD manually:
+    echo '${NOKRON_TARGET_USER} ALL=(ALL) NOPASSWD: ALL' \\
+      > /etc/sudoers.d/99-nokron-${NOKRON_TARGET_USER} \\
+      && chmod 0440 /etc/sudoers.d/99-nokron-${NOKRON_TARGET_USER}"
     fi
 
     info "running installer as ${NOKRON_TARGET_USER} (script refuses root)"

@@ -69,7 +69,10 @@ emit("NOKRON_TARGET_USER", meta.get("target_user", ""))
 emit("NOKRON_META_NAME", meta.get("name", "nokron"))
 emit("NOKRON_META_DESCRIPTION", meta.get("description", ""))
 
-# coprs
+# sudo: auto-configure NOPASSWD for target_user so the vendor stage
+# (dankinstall running as target_user) can call `sudo -n true` etc.
+sudo_cfg = cfg.get("sudo", {})
+emit("NOKRON_SUDO_PASSWORDLESS", str(bool(sudo_cfg.get("passwordless", True))).lower())
 coprs = cfg.get("coprs", {}).get("enable", [])
 emit("NOKRON_COPRS", coprs)
 

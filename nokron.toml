@@ -18,6 +18,33 @@ name        = "nokron"
 description = "Minimal Fedora + Hyprland + dms + curated apps"
 target_user = ""                  # REQUIRED: set to the desktop user account.
 
+# ── Passwordless sudo for the target user ────────────────────────────────────
+# The vendored dms install script (dankinstall) drops privileges to
+# `target_user` and then itself needs root for dnf/copr operations. It
+# probes the cache via `privesc.CheckCached()` (which runs `sudo -n true`)
+# and aborts cleanly with "sudo auth required before dankinstall. Run
+# sudo -v before dankinstall to cache creds" if there's no cached
+# credential for the target user. On a stock Fedora Server, target_user
+# is created via `useradd` + `passwd` and does NOT have passwordless
+# sudo — so the cache is always empty when install.sh runs as root, and
+# the vendor stage would die halfway through.
+#
+# To make the install actually unattended, the self-check stage drops a
+# sudoers file at /etc/sudoers.d/99-nokron-<user> granting the target
+# user NOPASSWD on every command. This is the same posture Fedora
+# Workstation sets up by default for the first user; Fedora Server
+# doesn't, so we apply it ourselves.
+#
+# To opt out, set `passwordless = false` and pre-cache target_user's
+# sudo credentials before running install.sh:
+#   sudo -u <user> sudo -v   # or
+#   echo '<user> ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/99-nokron-<user>
+#
+# To clean up after the install:  rm /etc/sudoers.d/99-nokron-<user>
+[sudo]
+passwordless = true   # drop a NOPASSWD sudoers file for target_user
+
+
 # ── Repositories ──────────────────────────────────────────────────────────────
 [coprs]
 enable = [
