@@ -52,40 +52,53 @@ stage_dnf() {
   info "installing DMS (dms-cli from avengemedia/dms COPR; dms-greeter excluded)"
   local dms_opts=( "${copr_flags[@]}" )
   [[ "${OMEDORA_DMS_WEAK_DEPS}" == "false" ]] && dms_opts+=( --setopt=install_weak_deps=False )
-  # Retry loop: the avengemedia/dms COPR occasionally writes a cached RPM
-  # that fails rpmReadPackageFile() at transaction time even though the
-  # download itself reports success ("Already downloaded" but the file
-  # can't be opened). On failure, nuke the package + solv cache for that
-  # repo and retry up to 3 times. Last attempt dumps rpm -K output before
-  # dying so the failure mode is debuggable.
-  local dms_cache_dir
-  dms_cache_dir="$(ls -d /var/cache/libdnf5/copr:copr.fedorainfracloud.org:avengemedia:dms-* 2>/dev/null | head -1 || true)"
-  local dms_attempt=1 dms_rc=0
+  # Bypass libdnf5's /var/cache/libdnf5 download path: dnf5 occasionally
+  # writes the RPM to its cache in a state rpmReadPackageFile() can't parse
+  # (the download itself reports success, but the cached file is bad and
+  # the transaction dies with "Failed to read package header"). Stage the
+  # RPMs to a tmpdir we control via `dnf5 download`, verify each one with
+  # rpm -K (which uses the same rpmReadPackageFile path), and only then
+  # hand them to `dnf5 install <local-path>` for the actual install.
+  local dms_stage dms_attempt=1 dms_rc=0 dms_rpm
+  dms_stage="$(mktemp -d /tmp/dms-stage.XXXXXX)"
   while (( dms_attempt <= 3 )); do
-    # Force re-download on every attempt: scrub cached RPMs + solv index
-    # so dnf5 has to re-fetch from the COPR mirror. Without this, dnf5
-    # trusts its package cache and reuses the corrupt file.
-    if [[ -n "${dms_cache_dir}" ]]; then
-      rm -f "${dms_cache_dir}"/packages/*.rpm 2>/dev/null || true
-      rm -f "${dms_cache_dir}"/solv/* 2>/dev/null || true
+    rm -f "${dms_stage}"/*.rpm 2>/dev/null || true
+    if ! dnf5 download -y "${copr_flags[@]}" --destdir="${dms_stage}" \
+         --exclude dms-greeter dms; then
+      warn "dms download attempt ${dms_attempt}/3 failed"
+      dms_attempt=$(( dms_attempt + 1 ))
+      continue
     fi
-    dnf5 -y install "${dms_opts[@]}" --exclude dms-greeter dms
-    dms_rc=$?
-    if (( dms_rc == 0 )); then
+    # Validate every staged RPM with rpm -K — this is the same
+    # rpmReadPackageFile() path the failing transaction uses, so a passing
+    # check here proves the install won't fail at header read.
+    local dms_bad=0
+    for dms_rpm in "${dms_stage}"/*.rpm; do
+      [[ -f "${dms_rpm}" ]] || continue
+      if ! rpm -K "${dms_rpm}" >/dev/null 2>&1; then
+        warn "rpm -K failed for: ${dms_rpm} ($(rpm -K "${dms_rpm}" 2>&1 | tail -1))"
+        dms_bad=1
+      fi
+    done
+    # Build a list of installable RPMs (skip src.rpm). Glob returns the
+    # pattern itself when nothing matches; the installable array stays
+    # empty in that case and the install fails through to the next retry.
+    local -a installable=()
+    for dms_rpm in "${dms_stage}"/*.rpm; do
+      [[ -f "${dms_rpm}" ]] || continue
+      [[ "${dms_rpm}" == *.src.rpm ]] && continue
+      installable+=( "${dms_rpm}" )
+    done
+    if (( ${#installable[@]} > 0 )) && (( dms_bad == 0 )) && \
+       dnf5 -y install "${dms_opts[@]}" "${installable[@]}"; then
+      dms_rc=0
       break
     fi
-    warn "dms install attempt ${dms_attempt}/3 failed (rc=${dms_rc})"
+    warn "dms install attempt ${dms_attempt}/3 failed"
     dms_attempt=$(( dms_attempt + 1 ))
   done
   if (( dms_rc != 0 )); then
-    if [[ -n "${dms_cache_dir}" && -d "${dms_cache_dir}/packages" ]]; then
-      local pkg; pkg="$(ls "${dms_cache_dir}/packages/"*.rpm 2>/dev/null | head -1 || true)"
-      if [[ -n "${pkg}" ]]; then
-        warn "rpm -K on cached RPM: $(rpm -K "${pkg}" 2>&1)"
-        warn "size: $(stat -c '%s bytes' "${pkg}")"
-        warn "file: $(file "${pkg}")"
-      fi
-    fi
+    warn "staged RPMs in ${dms_stage}: $(ls -la "${dms_stage}" 2>&1)"
     die "dms install failed after 3 attempts"
   fi
 
