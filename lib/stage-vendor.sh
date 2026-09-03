@@ -1,48 +1,45 @@
-# lib/stage-vendor.sh — download + install vendored binaries from a pinned
-# GitHub release.
+# lib/stage-vendor.sh — invoke the vendored dms installer script.
 #
-# No signature verification. This is a personal postinstall script; the
-# download is trusted implicitly. If you want sha256 checksums, fork this
-# stage and re-add them.
+# We vendor the upstream installer from https://install.danklinux.com at
+# lib/vendor/danklinux-install.sh. That script handles:
+#   - querying the latest dms release tag from the GitHub API
+#   - downloading the right gzipped binary for our arch
+#   - sha256 verification (better than our previous no-verify stance)
+#   - decompression + execution
 #
-# To upgrade: bump [vendored.dms].version in nokron.toml, re-run
-# `install.sh --only vendor`.
+# dgop is installed via Fedora official repos (dnf5 install dgop) and is
+# NOT part of the vendored flow.
+#
+# The upstream installer refuses to run as root; when [vendored.dms].run_as_user
+# is true (default), we drop to target_user via `sudo -u` before invoking.
 
 stage_vendor() {
-  if [[ -z "${NOKRON_VENDORED_DMS_VERSION}" ]]; then
-    info "no vendored binaries configured"
+  local script_rel="${NOKRON_VENDORED_DMS_INSTALL_SCRIPT}"
+  if [[ -z "${script_rel}" ]]; then
+    info "no [vendored.dms].install_script configured — skipping dms install"
     return 0
   fi
 
-  section "vendor: dms ${NOKRON_VENDORED_DMS_VERSION}"
+  local script="${NOKRON_REPO_ROOT}/${script_rel}"
+  [[ -f "${script}" ]] || die "vendored dms install script not found: ${script}"
+  [[ -x "${script}" ]] || chmod +x "${script}"
 
-  local version="${NOKRON_VENDORED_DMS_VERSION}"
-  local base="${NOKRON_VENDORED_DMS_BASE_URL}"
-  local dest="${NOKRON_VENDORED_DMS_INSTALL_DIR}"
+  section "vendor: dms (via upstream installer)"
 
-  [[ -n "${base}" ]]   || die "[vendored.dms].base_url is empty"
-  [[ -d "${dest}" ]]   || install -d "${dest}"
-
-  local tmp
-  tmp="$(mktemp -d)" || die "mktemp failed"
-  trap 'rm -rf "${tmp}"' RETURN
-
-  for bin in "${NOKRON_VENDORED_DMS_BINS[@]}"; do
-    local url="${base}/${version}/${bin}"
-    local out="${tmp}/${bin}"
-
-    info "downloading ${bin} (${version})"
-    if ! curl -fsSL --retry 3 --connect-timeout 15 -o "${out}" "${url}"; then
-      die "download failed: ${url}"
+  # The upstream installer queries the GitHub releases API itself, so we
+  # don't pin a version here. To upgrade dms, just re-run this stage —
+  # it will fetch the latest release.
+  if [[ "${NOKRON_VENDORED_DMS_RUN_AS_USER}" == "true" ]]; then
+    if ! id "${NOKRON_TARGET_USER}" >/dev/null 2>&1; then
+      die "run_as_user=true but target_user '${NOKRON_TARGET_USER}' does not exist"
     fi
-
-    info "installing ${bin} → ${dest}/${bin}"
-    install -m 0755 "${out}" "${dest}/${bin}"
-  done
-
-  # NOKRON_VENDORED_DMS_UNIT was used by dms-greeter. We don't ship that
-  # anymore (tuigreet handles the greeter). Left in the TOML for legacy
-  # but not acted on here.
+    info "running installer as ${NOKRON_TARGET_USER} (script refuses root)"
+    sudo -u "${NOKRON_TARGET_USER}" -H "${script}" \
+      || die "dms installer failed — see output above"
+  else
+    warn "run_as_user=false — installer will likely refuse (it requires non-root)"
+    "${script}" || die "dms installer failed — see output above"
+  fi
 
   info "vendor stage complete"
 }

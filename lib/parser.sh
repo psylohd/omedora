@@ -77,32 +77,28 @@ apps = pkgs.get("apps", {})
 emit("NOKRON_APPS", apps.get("required", []))
 emit("NOKRON_APPS_OPTIONAL", apps.get("optional_copr", []))
 
-# vendored (dms binaries + tuigreet source)
+# vendored (dms install script + tuigreet source)
 v = cfg.get("vendored", {})
 vdms = v.get("dms", {})
-emit("NOKRON_VENDORED_DMS_VERSION", vdms.get("version", ""))
-emit("NOKRON_VENDORED_DMS_BASE_URL", vdms.get("base_url", ""))
-emit("NOKRON_VENDORED_DMS_BINS", vdms.get("bins", []))
-emit("NOKRON_VENDORED_DMS_INSTALL_DIR", vdms.get("install_dir", "/usr/local/bin"))
-# NOKRON_VENDORED_DMS_SHA256_* removed — dms is downloaded without
-# signature verification. Personal postinstall script, not a supply-chain
-# hardened tool.
-
+emit("NOKRON_VENDORED_DMS_INSTALL_SCRIPT", vdms.get("install_script", ""))
+emit("NOKRON_VENDORED_DMS_RUN_AS_USER", str(bool(vdms.get("run_as_user", False))).lower())
+# Dropped: NOKRON_VENDORED_DMS_VERSION, NOKRON_VENDORED_DMS_BASE_URL,
+# NOKRON_VENDORED_DMS_BINS, NOKRON_VENDORED_DMS_INSTALL_DIR,
+# NOKRON_VENDORED_DMS_*, NOKRON_VENDORED_DMS_SHA256__*. The vendor stage
+# now runs the upstream installer script (lib/vendor/danklinux-install.sh),
+# which handles version discovery + download + sha256 internally.
 vtg = v.get("tuigreet", {})
 emit("NOKRON_TUIGREET_REPO_URL", vtg.get("repo_url", ""))
 emit("NOKRON_TUIGREET_BRANCH", vtg.get("branch", ""))
 emit("NOKRON_TUIGREET_COMMIT", vtg.get("commit", ""))
-
 # flatpak
 fp = cfg.get("flatpak", {})
 emit("NOKRON_FLATPAK_SYSTEM", fp.get("system", []))
 emit("NOKRON_FLATPAK_USER", fp.get("user", []))
-
 # greeter
 g = cfg.get("greeter", {})
 emit("NOKRON_GREETER_BACKEND", g.get("backend", "tuigreet"))
 emit("NOKRON_GREETER_SESSION", g.get("session", "/usr/bin/start-hyprland"))
-
 # paths
 def repo_abs(rel):
     if not rel:

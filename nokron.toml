@@ -88,6 +88,7 @@ required = [
   "playerctl", "gnome-keyring",
   # Boot splash
   "plymouth", "plymouth-plugin-script",   # plugin-script is required by nokron theme
+  "papirus-icon-theme" # Icon pack
 ]
 
 optional_copr = [
@@ -97,17 +98,16 @@ optional_copr = [
 ]
 
 
-# ── Vendored binaries + tuigreet source ─────────────────────────────────────
-# dms lives in avengemedia/danklinux COPR but the version is too old. We
-# instead pin a specific upstream GitHub release. The installer downloads
-# the named bins without verifying signatures — this is a personal
-# postinstall script, not a production tool. Treat the download like any
-# other curl|bash: review the source first, accept the risk.
+# ── Vendored: dms install script + tuigreet source ────────────────────────────
+# dms: instead of pulling individual binaries (which would miss the bundled
+# asset pack and QML files), vendor the upstream dms installer script at
+# lib/vendor/danklinux-install.sh and run it. It downloads the latest dms
+# release, verifies sha256, decompresses, and runs the dms installer.
+# dgop is NOT vendored — install via Fedora repos (`dnf5 install dgop`).
+# dms-greeter is NOT vendored — it ships inside dms's asset bundle.
 [vendored.dms]
-version  = "1.5.4"                 # ← bump here to upgrade dms
-base_url = "https://github.com/AvengeMedia/DankMaterialShell/releases/download"
-bins    = ["dms", "dgop"]
-install_dir = "/usr/local/bin"
+install_script = "lib/vendor/danklinux-install.sh"
+run_as_user   = true            # drop to target_user before invoking (script refuses root)
 
 # tuigreet: cloned from a public git repo (your fork), checked out on a
 # branch (or pinned commit), built with cargo.
