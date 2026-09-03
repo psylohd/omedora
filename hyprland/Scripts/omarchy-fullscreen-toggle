@@ -1,0 +1,15 @@
+#!/bin/bash
+# Toggle Hyprland true fullscreen on the active window.
+# Also hides the DMS bar while fullscreen so the pane owns the whole screen,
+# then reveals it again when leaving fullscreen. Mirrors Ghostty's Ctrl+Enter feel.
+
+# Hyprland's `fullscreen` field on a window: 0 = off, 1 = maximized, 2 = fullscreen.
+was_fullscreen=$(hyprctl activewindow -j | jq -r '.fullscreen // 0')
+
+if [[ $was_fullscreen == "2" ]]; then
+  hyprctl dispatch 'hl.dsp.window.fullscreen({mode = "fullscreen", action = "unset"})' >/dev/null 2>&1 || true
+  dms ipc call bar reveal all >/dev/null 2>&1 || true
+else
+  dms ipc call bar hide all >/dev/null 2>&1 || true
+  hyprctl dispatch 'hl.dsp.window.fullscreen({mode = "fullscreen", action = "toggle"})' >/dev/null 2>&1 || true
+fi

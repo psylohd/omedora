@@ -1,0 +1,9 @@
+{
+  "wallpaperCarousel": {
+    "enabled": true,
+    "overlayOpacity": 76
+  },
+  "homeAssistantMonitor": {
+    "enabled": true
+  }
+}

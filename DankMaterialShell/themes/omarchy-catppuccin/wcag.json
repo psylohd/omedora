@@ -1,0 +1,21 @@
+{
+  "level": "fail",
+  "dark": {
+    "level": "fail",
+    "minRatio": 0,
+    "worstPair": [],
+    "body": {},
+    "accent": {},
+    "nonText": {},
+    "breakdown": []
+  },
+  "light": {
+    "level": "fail",
+    "minRatio": 0,
+    "worstPair": [],
+    "body": {},
+    "accent": {},
+    "nonText": {},
+    "breakdown": []
+  }
+}

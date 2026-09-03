@@ -1,0 +1,29 @@
+{
+  "id": "omarchy-vantablack",
+  "name": "Omarchy Vantablack",
+  "version": "1.0.0",
+  "author": "Avenge Media / ported from omacom/omarchy",
+  "description": "True black with subtle grey accents \u2014 the darkest Omarchy theme",
+  "dark": {
+    "primary": "#8d8d8d",
+    "primaryText": "#070707",
+    "primaryContainer": "#1a1a1a",
+    "secondary": "#9b9b9b",
+    "surface": "#000000",
+    "surfaceText": "#ffffff",
+    "surfaceVariant": "#7a7a7a",
+    "surfaceVariantText": "#ececec",
+    "surfaceTint": "#8d8d8d",
+    "background": "#070707",
+    "backgroundText": "#ffffff",
+    "outline": "#505050",
+    "surfaceContainerLowest": "#070707",
+    "surfaceContainerLow": "#090909",
+    "surfaceContainer": "#1a1a1a",
+    "surfaceContainerHigh": "#7a7a7a",
+    "surfaceContainerHighest": "#252525",
+    "error": "#a4a4a4",
+    "warning": "#cecece",
+    "info": "#b0b0b0"
+  }
+}

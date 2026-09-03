@@ -1,0 +1,296 @@
+#!/bin/bash
+# Minimal Super+K: show Hyprland keybindings in wofi with priority
+# ordering, padded columns, category tags, and Enter-to-dispatch.
+#
+# Reads all keybind sources (DMS defaults + user overrides) and merges
+# with live hyprctl binds to render a fuzzy-searchable cheatsheet.
+
+set -euo pipefail
+
+MAIN_MOD="${MAIN_MOD:-SUPER}"
+TMP="$(mktemp -u --suffix=.txt)"
+trap 'rm -f "$TMP" "$TMP".*' EXIT
+
+# Decide which config files to mine. Last write wins for same chord.
+CONFIG_FILES=()
+for f in \
+	"$HOME/.config/hypr/keybind.lua" \
+	"$HOME/.config/hypr/dms/binds-user.lua" \
+	"$HOME/.config/hypr/dms/binds.lua" \
+; do
+	[[ -f $f ]] && CONFIG_FILES+=( "$f" )
+done
+
+# 1. Mine config files for chord, description, dispatch expression.
+python3 - "${CONFIG_FILES[@]}" "$MAIN_MOD" <<'PY' > "$TMP.desc"
+import re, sys
+
+paths = sys.argv[1:-1]
+main_mod = sys.argv[-1]
+
+key_pat = re.compile(
+    r'^\s*(?P<name>[A-Z][A-Z0-9_]*)\s*=\s*'
+    r'\(\s*"(?P<fmt>[^"]+)"\s*\)\s*:\s*format\('
+)
+bind_direct = re.compile(
+    r'\bhl\.bind\(\s*"(?P<chord>[^"]+)"\s*,\s*(?P<expr>.*?)\s*,\s*\{',
+    re.DOTALL,
+)
+bind_keyed = re.compile(
+    r'\bhl\.bind\(\s*KEY\.(?P<name>[A-Z][A-Z0-9_]*)\s*,\s*(?P<expr>.*?)\s*,\s*\{',
+    re.DOTALL,
+)
+unbind_pat = re.compile(r'\bhl\.unbind\(\s*"(?P<chord>[^"]+)"')
+desc_pat = re.compile(r'description\s*=\s*"(?P<d>[^"]+)"')
+
+combos, binds = {}, {}
+
+for path in paths:
+    src = open(path).read()
+    lines = src.splitlines()
+
+    for line in lines:
+        m = key_pat.search(line)
+        if m:
+            combos[m.group('name')] = m.group('fmt').replace('%s', main_mod)
+
+    current, current_expr = None, None
+    for line in lines:
+        u = unbind_pat.search(line)
+        if u:
+            binds.pop(u.group('chord'), None)
+            continue
+        full = bind_direct.search(line)
+        if full:
+            current = full.group('chord')
+            current_expr = full.group('expr').strip()
+            d = desc_pat.search(line)
+            if d:
+                binds[current] = (d.group('d'), current_expr or '')
+                current = None
+                current_expr = None
+                continue
+        full = bind_keyed.search(line)
+        if full:
+            name = full.group('name')
+            current_expr = full.group('expr').strip()
+            if name in combos:
+                current = combos[name]
+                d = desc_pat.search(line)
+                if d:
+                    binds[current] = (d.group('d'), current_expr or '')
+                    current = None
+                    current_expr = None
+                    continue
+        if current:
+            d = desc_pat.search(line)
+            if d:
+                binds[current] = (d.group('d'), current_expr or '')
+                current = None
+                current_expr = None
+
+for chord, (desc, expr) in sorted(binds.items()):
+    print(f"{chord}\t{desc}\t{expr}")
+PY
+
+# 2. Parse hyprctl binds (combo, dispatcher, arg).
+hyprctl binds 2>/dev/null | awk -F': ' '
+  /^bind/ { emit = 1; modmask = 0; key = ""; desc = ""; dispatcher = ""; arg = ""; next }
+  emit && /modmask:/ { modmask = $2 + 0 }
+  emit && /^[[:space:]]+key:/ { key = $2 }
+  emit && /^[[:space:]]+description:/ {
+    s = $0; sub(/^[[:space:]]+description:[[:space:]]+/, "", s); desc = s
+  }
+  emit && /^[[:space:]]+dispatcher:/ {
+    s = $0; sub(/^[[:space:]]+dispatcher:[[:space:]]+/, "", s); dispatcher = s
+  }
+  emit && /^[[:space:]]+arg:/ {
+    s = $0; sub(/^[[:space:]]+arg:[[:space:]]+/, "", s); arg = s
+  }
+  emit && /^$/ {
+    if (key != "" && key != "code:201") {
+      m = ""
+      b = modmask
+      if (int(b) >= 64) { m = (m ? m " SUPER" : "SUPER"); b -= 64 }
+      if (int(b) >= 8 ) { m = (m ? m " ALT"   : "ALT");   b -= 8 }
+      if (int(b) >= 4 ) { m = (m ? m " CTRL"  : "CTRL");  b -= 4 }
+      if (int(b) >= 1 ) { m = (m ? m " SHIFT" : "SHIFT"); b -= 1 }
+      combo = (m ? m " + " : "") key
+      printf "%s\t%s\t%s\t%s\n", combo, desc, dispatcher, arg
+    }
+    emit = 0
+  }
+' > "$TMP.hypr"
+
+# 3. Merge Lua descriptions and dispatch expressions into bind rows.
+awk -F'\t' '
+  FNR == NR { lua_d[$1] = $2; lua_e[$1] = $3; next }
+  {
+    combo = $1; desc = $2; dispatcher = $3; arg = $4
+    if ((desc == "" || desc == dispatcher) && (combo in lua_d) && lua_d[combo] != "") {
+      desc = lua_d[combo]
+    }
+    expr = (combo in lua_e) ? lua_e[combo] : ""
+    print combo "\t" desc "\t" dispatcher "\t" arg "\t" expr
+  }
+' "$TMP.desc" "$TMP.hypr" > "$TMP.merged"
+
+# 4. Heuristic description fallback.
+awk -F'\t' '
+  function cmd_word(s,    n, parts, last) {
+    sub(/^[[:space:]]*hl\.dsp\.exec_cmd\("/, "", s); sub(/",?[[:space:]]*$/, "", s)
+    sub(/^[[:space:]]*hl\.dsp\.exec\(/, "", s); sub(/\)[[:space:]]*$/, "", s)
+    n = split(s, parts, /[[:space:]|;&]+/)
+    if (n == 0) return s
+    last = parts[n]
+    sub(/.*\//, "", last)
+    return last
+  }
+  function synth(dispatcher, arg) {
+    if (dispatcher == "movefocus") return "Focus " arg
+    if (dispatcher == "movewindow") return "Move window " arg
+    if (dispatcher == "resizeactive") return "Resize window (" arg ")"
+    if (dispatcher == "togglefloating" || dispatcher == "float") return "Toggle floating"
+    if (dispatcher == "fullscreen") return "Toggle fullscreen"
+    if (dispatcher == "dpms") return "Toggle display power"
+    if (dispatcher == "layout") return "Layout " arg
+    if (dispatcher == "togglesplit") return "Toggle window split"
+    if (dispatcher == "pseudo") return "Toggle pseudo window"
+    if (dispatcher == "bringactivetotop") return "Bring window to top"
+    if (dispatcher == "killactive") return "Close window"
+    if (dispatcher == "toggleoverview") return "Toggle overview"
+    if (dispatcher == "cyclenext") return "Cycle windows"
+    if (dispatcher == "cyclenext,prev") return "Cycle windows (prev)"
+    if (dispatcher == "togglegroup") return "Toggle window group"
+    if (dispatcher == "workspace") return "Workspace " arg
+    if (dispatcher == "movetoworkspace") return "Move to workspace " arg
+    if (dispatcher == "movetomonitor") return "Move to monitor " arg
+    if (dispatcher == "focusmonitor") return "Focus monitor " arg
+    if (dispatcher == "submap") return "Submap " arg
+    if (dispatcher == "sendshortcut") return "Send shortcut " arg
+    if (dispatcher == "__lua" || dispatcher == "exec") return ""
+    return "Dispatch " dispatcher
+  }
+  {
+    combo = $1; desc = $2; dispatcher = $3; arg = $4; expr = $5
+    if (desc == "" || desc == dispatcher) {
+      desc = synth(dispatcher, arg)
+      if (desc == "" && expr != "") {
+        cw = cmd_word(expr)
+        if (cw != "") desc = "Run " cw
+      }
+    }
+    if (desc != "" && desc != dispatcher) {
+      print combo "\t" desc "\t" dispatcher "\t" arg "\t" expr
+    }
+  }
+' "$TMP.merged" > "$TMP.heuristic"
+mv "$TMP.heuristic" "$TMP.merged"
+
+# 5. Rank and group by category.
+awk -F'\t' '
+  function prio(desc) {
+    if (desc ~ /[Kk]eybindings|[Cc]heatsheet/) return 0
+    if (desc ~ /[Ll]ock/) return 1
+    if (desc ~ /[Tt]erminal/) return 2
+    if (desc ~ /[Bb]rowser/ && desc !~ /\(/) return 3
+    if (desc ~ /[Ff]ile manager/) return 4
+    if (desc ~ /[Ll]auncher|[Ss]potlight/) return 5
+    if (desc ~ /[Ss]ettings|[Ww]allpaper/) return 6
+    if (desc ~ /[Ff]ull/) return 7
+    if (desc ~ /[Cc]lose window/) return 8
+    if (desc ~ /[Ff]loating|[Ss]plit/) return 9
+    if (desc ~ /[Ss]cratchpad/) return 10
+    if (desc ~ /[Ss]creenshot|[Aa]nnotate/) return 11
+    if (desc ~ /workspace/) return 20
+    if (desc ~ /[Ff]ocus/) return 21
+    if (desc ~ /[Mm]ove window|[Ss]wap window/) return 22
+    if (desc ~ /[Rr]esize|[Ee]xpand|[Ss]hrink/) return 23
+    if (desc ~ /[Vv]olume|[Aa]udio|[Mm]edia/) return 30
+    if (desc ~ /XF86/) return 99
+    return 50
+  }
+  function cat(desc) {
+    if (desc ~ /[Bb]rowser/) return "WEB"
+    if (desc ~ /[Tt]erminal|[Tt]mux/) return "TERM"
+    if (desc ~ /[Ff]ile manager/) return "FILES"
+    if (desc ~ /[Ee]ditor|[Cc]ode/) return "EDIT"
+    if (desc ~ /[Ll]auncher|[Ss]potlight|[Ss]ettings|[Ll]ock|[Kk]eybindings|[Ww]allpaper/) return "SYS"
+    if (desc ~ /[Ww]orkspace/) return "WORKSPACE"
+    if (desc ~ /[Ss]cratchpad|[Ff]ull|[Ff]loating|[Cc]lose|[Rr]esize|[Ee]xpand|[Ss]hrink|[Ss]wap|[Mm]ove window|[Ff]ocus/) return "WINDOW"
+    if (desc ~ /[Ss]creenshot|[Aa]nnotate/) return "CAPTURE"
+    if (desc ~ /[Vv]olume|[Aa]udio|[Mm]edia|XF86/) return "MEDIA"
+    if (desc ~ /[Mm]ouse/) return "MOUSE"
+    return "OTHER"
+  }
+  {
+    combo = $1; desc = $2; dispatcher = $3; arg = $4; expr = $5
+    printf "%d\t%s\t%s\t%s\t%s\t%s\n", prio(desc), combo, desc, dispatcher, arg, cat(desc)
+  }
+' "$TMP.merged" | sort -k1,1n -k2,2 > "$TMP.sorted"
+
+# 6. Format for wofi: padded key column, arrow separator, category tag.
+awk -F'\t' '
+  BEGIN { col = 34 }
+  {
+    combo = $2; desc = $3; dispatcher = $4; arg = $5; expr = $6; c = $7
+    key_padded = combo
+    while (length(key_padded) < col) key_padded = key_padded " "
+    gsub(/&/, "\\&amp;", desc)
+    gsub(/</, "\\&lt;", desc)
+    visible = sprintf("<tt><span foreground=\"#88c0d0\">%-*s</span></tt>  \xe2\x86\x92  %s  <span foreground=\"#4c566a\" size=\"x-small\">%s</span>", col, key_padded, desc, c)
+    printf "%s\t%s\t%s\t%s\t%s\n", visible, dispatcher, arg, expr, combo
+  }
+' "$TMP.sorted" > "$TMP.rows"
+
+if [[ ! -s $TMP.rows ]]; then
+  notify-send -a "hyprland" -u critical "No bindings found"
+  exit 1
+fi
+
+# 7. Show in wofi.
+wofi_args=(
+  --dmenu
+  --prompt "Keybindings"
+  --width 880
+  --height 560
+  --hide-scroll
+  --no-actions
+  --matching fuzzy
+  --insensitive
+  --allow-markup
+  --parse-search
+)
+[[ -f ~/.config/wofi/config   ]] && wofi_args+=(--conf   ~/.config/wofi/config)
+[[ -f ~/.config/wofi/style.css ]] && wofi_args+=(--style ~/.config/wofi/style.css)
+
+visible_selection=$(awk -F'\t' '{print $1}' "$TMP.rows" | wofi "${wofi_args[@]}" 2>/dev/null) || exit 0
+[[ -z $visible_selection ]] && exit 0
+
+# 8. Find the matching row and dispatch.
+record=$(awk -F'\t' -v sel="$visible_selection" '
+  function unmarkup(s) { gsub(/<[^>]*>/, "", s); return s }
+  { if (unmarkup($1) == sel) { print $2 "\t" $3 "\t" $4 "\t" $5; exit } }
+' "$TMP.rows")
+
+dispatcher=$(cut -f1 <<<"$record")
+arg=$(cut -f2 <<<"$record")
+expr=$(cut -f3 <<<"$record")
+
+case $dispatcher in
+  exec|"")
+    [[ -n $arg ]] && hyprctl dispatch exec "$arg" >/dev/null 2>&1 || true
+    ;;
+  __lua)
+    if [[ -n $expr ]]; then
+      hyprctl dispatch "$expr" >/dev/null 2>&1 || true
+    fi
+    ;;
+  *)
+    if [[ -n $arg ]]; then
+      hyprctl dispatch "$dispatcher" "$arg" >/dev/null 2>&1 || true
+    else
+      hyprctl dispatch "$dispatcher" >/dev/null 2>&1 || true
+    fi
+    ;;
+esac

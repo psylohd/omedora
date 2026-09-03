@@ -1,0 +1,29 @@
+{
+  "id": "omarchy-hackerman",
+  "name": "Omarchy Hackerman",
+  "version": "1.0.0",
+  "author": "Avenge Media / ported from omacom/omarchy",
+  "description": "High-contrast hacker green-on-black aesthetic from the Omarchy theme collection",
+  "dark": {
+    "primary": "#00ff9f",
+    "primaryText": "#000000",
+    "primaryContainer": "#141414",
+    "secondary": "#ff00ff",
+    "surface": "#0a0a0a",
+    "surfaceText": "#00ff9f",
+    "surfaceVariant": "#2d5a45",
+    "surfaceVariantText": "#5affb8",
+    "surfaceTint": "#00ff9f",
+    "background": "#000000",
+    "backgroundText": "#00ff9f",
+    "outline": "#007a47",
+    "surfaceContainerLowest": "#000000",
+    "surfaceContainerLow": "#050505",
+    "surfaceContainer": "#141414",
+    "surfaceContainerHigh": "#2d5a45",
+    "surfaceContainerHighest": "#10281e",
+    "error": "#ff0055",
+    "warning": "#ffff00",
+    "info": "#00ffff"
+  }
+}

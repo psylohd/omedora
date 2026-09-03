@@ -1,0 +1,4 @@
+-- dms/binds.lua — DMS default keybinds (Hyprland 0.55+ Lua).
+-- Stub: dms regenerates this on first launch. Don't edit by hand; layer
+-- your overrides in dms/binds-user.lua instead (it loads after this file).
+-- See https://danklinux.com/docs/dankmaterialshell/keybinds-ipc
