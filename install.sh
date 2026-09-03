@@ -72,12 +72,13 @@ load_config
 # Apply --only / --skip overrides to the stage flags.
 apply_stage_filter() {
   local s
-  # Default ALL known stages to false first so missing flags from TOML don't
-  # cause "unbound variable" later. --only then re-enables the chosen ones.
-  for s in copr dnf vendor flatpak plymouth tuigreet hyprland quickshell greetd dms services; do
-    printf -v "NOKRON_STAGE_${s^^}" "false"
-  done
+  # When --only is passed, reset all known stages to false first so --only
+  # starts from a known-clean slate. Without --only, leave the TOML-emitted
+  # values alone (don't disable what the user explicitly enabled).
   if [[ -n "${ONLY}" ]]; then
+    for s in copr dnf vendor flatpak plymouth tuigreet hyprland quickshell greetd dms services; do
+      printf -v "NOKRON_STAGE_${s^^}" "false"
+    done
     IFS=',' read -ra list <<< "${ONLY}"
     for s in "${list[@]}"; do
       local var="NOKRON_STAGE_${s^^}"
