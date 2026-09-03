@@ -14,14 +14,14 @@ stage_services() {
     return 0
   fi
 
-  for svc in "${NOKRON_SERVICES_ENABLE[@]}"; do
+  for svc in "${OMEDORA_SERVICES_ENABLE[@]}"; do
     info "enabling ${svc}"
     systemctl enable "${svc}" || warn "failed to enable ${svc} (continuing)"
   done
 
-  if [[ -n "${NOKRON_SERVICES_DEFAULT}" ]]; then
-    info "setting default target: ${NOKRON_SERVICES_DEFAULT}"
-    systemctl set-default "${NOKRON_SERVICES_DEFAULT}" \
-      || warn "set-default ${NOKRON_SERVICES_DEFAULT} failed"
+  if [[ -n "${OMEDORA_SERVICES_DEFAULT}" ]]; then
+    info "setting default target: ${OMEDORA_SERVICES_DEFAULT}"
+    systemctl set-default "${OMEDORA_SERVICES_DEFAULT}" \
+      || warn "set-default ${OMEDORA_SERVICES_DEFAULT} failed"
   fi
 }

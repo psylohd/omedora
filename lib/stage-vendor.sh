@@ -11,9 +11,9 @@ stage_vendor() {
   section "vendor: tuigreet"
   require_root
 
-  local repo_url="${NOKRON_TUIGREET_REPO_URL}"
-  local branch="${NOKRON_TUIGREET_BRANCH}"
-  local commit="${NOKRON_TUIGREET_COMMIT}"
+  local repo_url="${OMEDORA_TUIGREET_REPO_URL}"
+  local branch="${OMEDORA_TUIGREET_BRANCH}"
+  local commit="${OMEDORA_TUIGREET_COMMIT}"
 
   if [[ -z "${repo_url}" ]]; then
     info "tuigreet vendoring disabled (empty repo_url)"

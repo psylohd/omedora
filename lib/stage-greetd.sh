@@ -12,7 +12,7 @@
 
 stage_greetd() {
   require_root
-  section "greetd: wiring ${NOKRON_GREETER_BACKEND}"
+  section "greetd: wiring ${OMEDORA_GREETER_BACKEND}"
 
   local cfg="/etc/greetd/config.toml"
   install -d /etc/greetd
@@ -26,7 +26,7 @@ stage_greetd() {
   local tmp; tmp="$(mktemp /etc/greetd/config.toml.XXXXXX)"
   # Clean up temp file on any exit (error, interrupt, etc.)
   trap 'rm -f '"${tmp}" EXIT
-  case "${NOKRON_GREETER_BACKEND}" in
+  case "${OMEDORA_GREETER_BACKEND}" in
     tuigreet)
       cat > "${tmp}" <<'GREETD_EOF'
 [terminal]
@@ -48,7 +48,7 @@ user = "greetd"
 GREETD_EOF
       ;;
     *)
-      die "unknown greeter backend: ${NOKRON_GREETER_BACKEND}"
+      die "unknown greeter backend: ${OMEDORA_GREETER_BACKEND}"
       ;;
   esac
 

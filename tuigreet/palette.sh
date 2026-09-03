@@ -21,15 +21,15 @@
 #   > 56 px/row  → 32×64 (lat4-32 / ter-v64n)
 #
 # Override at run time:
-#   NOKRON_FORCE_FONT=ter-v32n sh -c '...palette.sh...'
-#   NOKRON_NO_FONT=1                        skip font selection entirely
+#   OMEDORA_FORCE_FONT=ter-v32n sh -c '...palette.sh...'
+#   OMEDORA_NO_FONT=1                        skip font selection entirely
 #
 # Only meaningful on the Linux TTY; silently no-ops on Wayland/headless
 # or when setfont is unavailable.
 
 pick_console_font() {
     [ "$TERM" = "linux" ] || return 0
-    [ -z "${NOKRON_NO_FONT-}" ] || return 0
+    [ -z "${OMEDORA_NO_FONT-}" ] || return 0
     command -v setfont >/dev/null 2>&1 || return 0
     tty_dev="$(tty 2>/dev/null)" || tty_dev=/dev/tty
     [ -w "$tty_dev" ] || return 0
@@ -51,7 +51,7 @@ pick_console_font() {
     else                          font=ter-v64n
     fi
 
-    if [ -n "${NOKRON_FORCE_FONT-}" ]; then font=$NOKRON_FORCE_FONT; fi
+    if [ -n "${OMEDORA_FORCE_FONT-}" ]; then font=$OMEDORA_FORCE_FONT; fi
 
     setfont -C "$tty_dev" "$font" 2>/dev/null || return 0
 }
