@@ -70,39 +70,40 @@ stage_config_plymouth() {
 
 stage_config_tuigreet() {
   local src="${NOKRON_PATH_TUIGREET}"
-  local workdir=""        # set by one of the branches below; init for set -u
   [[ -d "${src}" ]] || die "tuigreet theme dir not found: ${src}"
+
+  # Decide where the Cargo workspace lives. Each branch sets src_src to the
+  # directory containing Cargo.toml; the trap (if any) cleans it up. This
+  # avoids any set -u issues with a shared workdir variable that could be
+  # unbound depending on which branch ran.
+  local src_src=""      # absolute path to the Cargo workspace root
+  local cleanup=""      # path to remove on exit (empty = nothing to clean)
 
   if [[ -n "${NOKRON_TUIGREET_REPO_URL}" ]]; then
     # New style: clone from a pinned git URL into a scratch dir, build, clean up.
-    if [[ -z "${NOKRON_TUIGREET_BRANCH}" ]]; then
-      die "[vendored.tuigreet].branch is empty — set to e.g. 'tweak'"
-    fi
-    if ! command -v git >/dev/null 2>&1; then
-      die "git not found. dnf5 install git first."
-    fi
-    if ! command -v cargo >/dev/null 2>&1; then
-      die "cargo not found. Did [packages.build] install fail?"
-    fi
+    [[ -n "${NOKRON_TUIGREET_BRANCH}" ]] \
+      || die "[vendored.tuigreet].branch is empty — set to e.g. 'tweak'"
+    command -v git  >/dev/null 2>&1 || die "git not found. dnf5 install git first."
+    command -v cargo >/dev/null 2>&1 || die "cargo not found. Did [packages.build] install fail?"
 
-    workdir="$(mktemp -d)" || die "mktemp failed"
-    trap 'rm -rf "${workdir}"' RETURN
+    cleanup="$(mktemp -d)" || die "mktemp failed"
+    src_src="${cleanup}/tuigreet"
 
     info "cloning tuigreet (${NOKRON_TUIGREET_BRANCH})"
     git clone --depth=1 --branch "${NOKRON_TUIGREET_BRANCH}" \
-      "${NOKRON_TUIGREET_REPO_URL}" "${workdir}/tuigreet" \
+      "${NOKRON_TUIGREET_REPO_URL}" "${src_src}" \
       || die "git clone failed: ${NOKRON_TUIGREET_REPO_URL}"
 
     if [[ -n "${NOKRON_TUIGREET_COMMIT}" ]]; then
       info "checking out pinned commit ${NOKRON_TUIGREET_COMMIT}"
-      ( cd "${workdir}/tuigreet" && git fetch --unshallow \
+      ( cd "${src_src}" && git fetch --unshallow \
         && git checkout "${NOKRON_TUIGREET_COMMIT}" ) \
         || die "git checkout failed"
     fi
   else
     # Legacy style: a pre-cloned Cargo workspace already in the repo
     # (NOKRON_PATH_TUIGREET_SRC). Honour it if it has a Cargo.toml.
-    local legacy_src="${NOKRON_PATH_TUIGREET_SRC}"
+    local legacy_src="${NOKRON_PATH_TUIGREET_SRC:-}"
     if [[ -z "${legacy_src}" || ! -f "${legacy_src}/Cargo.toml" ]]; then
       die "[vendored.tuigreet].repo_url is empty and [paths.repo].tuigreet_src
 points to a non-Cargo directory. Either:
@@ -110,13 +111,18 @@ points to a non-Cargo directory. Either:
   2. Set [paths.repo].tuigreet_src to a directory containing Cargo.toml"
     fi
     warn "using legacy tuigreet_src path: ${legacy_src}"
-    workdir="$(dirname "${legacy_src}")"
+    src_src="$(dirname "${legacy_src}")"
   fi
 
   # ── 2. Build ───────────────────────────────────────────────────────────────
-  local src_src="${workdir}/tuigreet"
-  [[ -f "${src_src}/Cargo.toml" ]] \
-    || die "tuigreet Cargo.toml not found in ${src_src}"
+  # Register cleanup for the clone-scratch path. Only fires when we created
+  # a tempdir; legacy path leaves the user-owned workspace in place.
+  if [[ -n "${cleanup}" ]]; then
+    trap 'rm -rf "${cleanup}"' RETURN
+  fi
+
+  [[ -n "${src_src}" && -f "${src_src}/Cargo.toml" ]] \
+    || die "tuigreet Cargo.toml not found in '${src_src}'"
 
   info "building tuigreet (cargo --release)"
   ( cd "${src_src}" && cargo build --release -p tuigreet ) \
@@ -140,7 +146,6 @@ points to a non-Cargo directory. Either:
   fi
   chmod 0755 /var/cache/tuigreet
 }
-
 stage_config_hyprland() {
   local home="$1"
   local src="${NOKRON_PATH_HYPRLAND}"
