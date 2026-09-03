@@ -18,10 +18,10 @@ stage_dnf() {
     dnf5 -y install "${OMEDORA_QUICKSHELL[@]}" || die "quickshell install failed"
   fi
 
-  info "installing DMS (dms + weak deps from avengemedia/dms COPR)"
+  info "installing DMS (dms-cli from avengemedia/dms COPR; dms-greeter excluded)"
   local dms_opts=()
   [[ "${OMEDORA_DMS_WEAK_DEPS}" == "false" ]] && dms_opts+=( --setopt=install_weak_deps=False )
-  dnf5 -y install "${dms_opts[@]}" dms || die "dms install failed"
+  dnf5 -y install "${dms_opts[@]}" --exclude dms-greeter dms || die "dms install failed"
   info "installing required apps (${#OMEDORA_APPS[@]} packages)"
   if [[ ${#OMEDORA_APPS[@]} -gt 0 ]]; then
     dnf5 -y install "${OMEDORA_APPS[@]}" || die "apps install failed"

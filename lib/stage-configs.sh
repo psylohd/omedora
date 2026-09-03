@@ -79,6 +79,9 @@ stage_config_tuigreet() {
   local src_src=""      # absolute path to the Cargo workspace root
   local cleanup=""      # path to remove on exit (empty = nothing to clean)
 
+  # Skip build if vendor stage already installed the binary (avoids double-build
+  # when --only tuigreet is used, which enables both vendor + tuigreet stages).
+  if ! command -v tuigreet >/dev/null 2>&1; then
   if [[ -n "${OMEDORA_TUIGREET_REPO_URL}" ]]; then
     # New style: clone from a pinned git URL into a scratch dir, build, clean up.
     [[ -n "${OMEDORA_TUIGREET_BRANCH}" ]] \
@@ -135,6 +138,8 @@ points to a non-Cargo directory. Either:
   [[ -x "${bin}" ]] || die "tuigreet binary missing after build: ${bin}"
 
   install -m 0755 "${bin}" /usr/local/bin/tuigreet
+  fi
+
 
   # ── 3. Drop the theme config ───────────────────────────────────────────────
   install -d /etc/tuigreet
@@ -157,20 +162,20 @@ stage_config_hyprland() {
 
   backup_and_copy_tree "${src}" "${home}/.config/hypr"
   chown -R "${OMEDORA_TARGET_USER}:${OMEDORA_TARGET_USER}" "${home}/.config/hypr"
+  chown "${OMEDORA_TARGET_USER}:${OMEDORA_TARGET_USER}" "${home}/.config"
 }
 
 stage_config_quickshell() {
-  local home="$1"
   local src="${OMEDORA_PATH_QUICKSHELL}"
 
   [[ -d "${src}" ]] || { warn "quickshell config dir not found: ${src} (skipping)"; return 0; }
 
   backup_and_copy_tree "${src}" "${home}/.config/quickshell"
   chown -R "${OMEDORA_TARGET_USER}:${OMEDORA_TARGET_USER}" "${home}/.config/quickshell"
+  chown "${OMEDORA_TARGET_USER}:${OMEDORA_TARGET_USER}" "${home}/.config"
 }
 
 # ── helpers ───────────────────────────────────────────────────────────────────
-
 # backup_and_install <src> <dst> — copy src to dst, backing up any existing file.
 backup_and_install() {
   local src="$1" dst="$2"

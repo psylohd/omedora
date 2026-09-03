@@ -50,7 +50,7 @@ stage_dms() {
 
   # Permissions: everything user-readable, owned by the desktop user.
   chown -R "${target_user}:${target_user}" "${dst}"
-
+  chown "${target_user}:${target_user}" "${user_home}/.config"
   # ── Plugins ─────────────────────────────────────────────────────────────────
   # Two sources:
   #   OMEDORA_DMS_PLUGINS   — git URLs (cloned into ~/.config/DankMaterialShell/plugins/)
