@@ -72,4 +72,22 @@ stage_dms() {
       warn "  plugin install failed for: ${plugin} (continuing)"
     fi
   done
+
+  # ── Enable dms user service + lingering ─────────────────────────────────────
+  # `/usr/lib/systemd/user/dms.service` (shipped by the dms package) auto-
+  # starts the shell on graphical-session.target. We need:
+  #   1. loginctl enable-linger <user>  — keeps the systemd user manager
+  #      alive across logouts so dms can start at boot (not just on first
+  #      login after install).
+  #   2. systemctl --user enable dms.service — links the service into the
+  #      user's default target so greetd/Hyprland/dms chain fires.
+  # Both commands must run AS THE USER, not as root (user services are
+  # owned by the user). sudo -u with HOME preserved via -H.
+  if [[ "$(loginctl show-user "${target_user}" 2>/dev/null | awk -F= '/^Linger=/{print $2}')" != "yes" ]]; then
+    loginctl enable-linger "${target_user}" \
+      || warn "loginctl enable-linger ${target_user} failed (continuing — user can run it manually)"
+  fi
+  if ! sudo -u "${target_user}" -H systemctl --user enable dms.service 2>/dev/null; then
+    warn "systemctl --user enable dms.service failed (continuing — user can enable it manually)"
+  fi
 }
