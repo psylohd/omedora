@@ -66,6 +66,10 @@ done
 # ── Load config + helpers ─────────────────────────────────────────────────────
 source "${SCRIPT_DIR}/lib/parser.sh"
 source "${SCRIPT_DIR}/lib/self-check.sh"
+# Source stage functions so `run_stage <name> <fn>` can dispatch to them.
+for _stage in copr dnf vendor flatpak configs greetd dms services; do
+  source "${SCRIPT_DIR}/lib/stage-${_stage}.sh"
+done
 
 load_config
 
