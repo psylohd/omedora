@@ -136,8 +136,9 @@ points to a non-Cargo directory. Either:
   install -m 0644 "${src}/brand.txt"          /etc/tuigreet/brand.txt
 
   install -d /var/cache/tuigreet
-  if id greeter >/dev/null 2>&1; then
-    chown greeter:greeter /var/cache/tuigreet
+  # greetd RPM creates a 'greetd' system user that owns the pre-auth session.
+  if id greetd >/dev/null 2>&1; then
+    chown greetd:greetd /var/cache/tuigreet
   fi
   chmod 0755 /var/cache/tuigreet
 }

@@ -44,12 +44,12 @@ self_check() {
     fi
   fi
 
-  # 4. Greetd + greeter user. greetd's RPM creates the 'greeter' user on
-  #    install; install greetd now if the greetd stage is enabled and it's
-  #    missing.
-  if ! id greeter >/dev/null 2>&1; then
+  # 4. Greetd system user. The greetd RPM creates a 'greetd' user (not
+  #    'greeter' — that's dms-greeter's convention). If it's missing and
+  #    the greetd stage is enabled, install greetd to materialise it.
+  if ! id greetd >/dev/null 2>&1; then
     if [[ "${NOKRON_STAGE_GREETD}" == "true" ]]; then
-      warn "the 'greeter' user does not exist — installing greetd now"
+      warn "the 'greetd' user does not exist — installing greetd now"
       dnf5 -y install greetd \
         || die "dnf5 install greetd failed. Run manually:
   sudo dnf5 install greetd"

@@ -36,8 +36,11 @@ stage_greetd() {
 vt = 1
 
 [default_session]
+# greetd's RPM ships a 'greetd' system user (uid auto, home /var/lib/greetd,
+# shell /usr/sbin/nologin). It owns the session pre-auth; tuigreet/dms-greeter
+# then exec the chosen user's Hyprland session.
 command = "sh -c '. /etc/tuigreet/palette.sh; exec tuigreet --cmd /usr/local/bin/start-hyprland'"
-user = "greeter"
+user = "greetd"
 GREETD_EOF
       ;;
     dms-greeter)
@@ -47,12 +50,11 @@ vt = 1
 
 [default_session]
 command = "dms-greeter --command /usr/local/bin/start-hyprland"
-user = "greeter"
+user = "greetd"
 GREETD_EOF
       ;;
     *)
       die "unknown greeter backend: ${NOKRON_GREETER_BACKEND}"
-      ;;
   esac
 
   install -m 0644 "${tmp}" "${cfg}"
