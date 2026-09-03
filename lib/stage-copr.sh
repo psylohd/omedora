@@ -37,14 +37,20 @@ stage_copr() {
       info "terra-release already installed — Terra repo available"
     else
       info "installing Terra (fyralabs) repo"
-      # The bootstrap needs --nogpgcheck because the GPG key comes in the
-      # terra-release RPM itself. --repofrompath is the only way to reach
-      # Terra before the repo is configured locally.
+      # Per https://developer.fyralabs.com/terra/installing:
+      #   sudo dnf install --nogpgcheck \
+      #     --repofrompath 'terra,https://repos.fyralabs.com/terra$releasever' \
+      #     terra-release
+      # --nogpgcheck because the GPG key is inside terra-release itself
+      # (chicken-and-egg on first install). $releasever is expanded by
+      # dnf5 to the running Fedora major version. Re-runs of this stage
+      # see terra-release already installed and skip the bootstrap, so
+      # GPG verification is normal for everything else from Terra.
       dnf5 -y install \
         --nogpgcheck \
-        --repofrompath "terra,https://repos.fyralabs.com/terra$(. /etc/os-release && echo "${VERSION_ID%%.*}")" \
-        terra-release terra-gpg-keys \
-        || die "failed to install Terra (terra-release + terra-gpg-keys)"
+        --repofrompath 'terra,https://repos.fyralabs.com/terra$releasever' \
+        terra-release \
+        || die "failed to install Terra (terra-release)"
       info "Terra repo enabled"
     fi
   fi
