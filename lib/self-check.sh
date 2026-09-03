@@ -77,13 +77,19 @@ self_check() {
     fi
   fi
 
-  # 8. tuigreet source dir (for cargo build) and theme dir.
+  # 8. tuigreet: skip src-workspace check if we'll clone fresh from
+  #    [vendored.tuigreet].repo_url. Otherwise, require a pre-cloned
+  #    Cargo workspace at [paths.repo].tuigreet_src.
   if [[ "${NOKRON_STAGE_TUIGREET}" == "true" ]]; then
-    if [[ ! -d "${NOKRON_PATH_TUIGREET_SRC}" ]]; then
-      die "tuigreet Cargo workspace not found: ${NOKRON_PATH_TUIGREET_SRC}"
-    fi
-    if [[ ! -f "${NOKRON_PATH_TUIGREET_SRC}/Cargo.toml" ]]; then
-      die "Cargo.toml missing in ${NOKRON_PATH_TUIGREET_SRC}"
+    if [[ -z "${NOKRON_TUIGREET_REPO_URL}" ]]; then
+      if [[ ! -d "${NOKRON_PATH_TUIGREET_SRC}" ]]; then
+        die "tuigreet Cargo workspace not found: ${NOKRON_PATH_TUIGREET_SRC}
+Set [vendored.tuigreet].repo_url + branch (recommended), or point
+[paths.repo].tuigreet_src at a directory containing Cargo.toml."
+      fi
+      if [[ ! -f "${NOKRON_PATH_TUIGREET_SRC}/Cargo.toml" ]]; then
+        die "Cargo.toml missing in ${NOKRON_PATH_TUIGREET_SRC}"
+      fi
     fi
     if [[ ! -f "${NOKRON_PATH_TUIGREET}/nokron.theme.toml" ]]; then
       die "tuigreet theme not found: ${NOKRON_PATH_TUIGREET}/nokron.theme.toml"
