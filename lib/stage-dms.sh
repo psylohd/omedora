@@ -75,19 +75,36 @@ stage_dms() {
 
   # ── Enable dms user service + lingering ─────────────────────────────────────
   # `/usr/lib/systemd/user/dms.service` (shipped by the dms package) auto-
-  # starts the shell on graphical-session.target. We need:
-  #   1. loginctl enable-linger <user>  — keeps the systemd user manager
-  #      alive across logouts so dms can start at boot (not just on first
-  #      login after install).
-  #   2. systemctl --user enable dms.service — links the service into the
-  #      user's default target so greetd/Hyprland/dms chain fires.
-  # Both commands must run AS THE USER, not as root (user services are
-  # owned by the user). sudo -u with HOME preserved via -H.
+  # starts the shell on graphical-session.target. The installer enables it
+  # by writing the symlink directly under ~/.config/systemd/user/ (where
+  # `systemctl --user enable` would write it). This avoids the
+  # `sudo -u … systemctl --user` dance — `sudo -H` strips XDG_RUNTIME_DIR
+  # so the call silently fails on a fresh system where the user manager
+  # isn't running yet, or when the user is logged out. Dropping a symlink
+  # works regardless of session state.
+  #
+  # We also `loginctl enable-linger <user>` so the user's systemd manager
+  # stays alive across logouts — without this, dms only starts on the
+  # login that immediately follows the install.
+  if id "${target_user}" >/dev/null 2>&1; then
+    local user_unit_dir="${user_home}/.config/systemd/user"
+    # dms hooks graphical-session.target by default; that fires on every
+    # graphical login (greeter → Hyprland → dms). The Hyprland RPM ships
+    # hyprland-session.target as a regular FILE, not a directory, so we
+    # can't drop a `.wants/` symlink next to it. dms starts fine without
+    # the extra hook (graphical-session already pulls it in).
+    install -d -m 0755 -o "${target_user}" -g "${target_user}" \
+      "${user_unit_dir}/graphical-session.target.wants"
+    ln -sf /usr/lib/systemd/user/dms.service \
+      "${user_unit_dir}/graphical-session.target.wants/dms.service"
+    chown -h "${target_user}:${target_user}" \
+      "${user_unit_dir}/graphical-session.target.wants/dms.service"
+    info "enabled dms user service (graphical-session.target)"
+  fi
   if [[ "$(loginctl show-user "${target_user}" 2>/dev/null | awk -F= '/^Linger=/{print $2}')" != "yes" ]]; then
     loginctl enable-linger "${target_user}" \
-      || warn "loginctl enable-linger ${target_user} failed (continuing — user can run it manually)"
-  fi
-  if ! sudo -u "${target_user}" -H systemctl --user enable dms.service 2>/dev/null; then
-    warn "systemctl --user enable dms.service failed (continuing — user can enable it manually)"
+      || warn "loginctl enable-linger ${target_user} failed (user can run it manually)"
+  else
+    info "loginctl enable-linger already enabled for ${target_user}"
   fi
 }
