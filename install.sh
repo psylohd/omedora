@@ -119,8 +119,8 @@ echo "  config:      ${NOKRON_CONFIG}"
 echo
 echo "  stages:"
 for s in copr dnf vendor flatpak plymouth tuigreet hyprland quickshell greetd dms services; do
-  local f="NOKRON_STAGE_${s^^}"
-  local v="${!f}"
+  f="NOKRON_STAGE_${s^^}"
+  v="${!f}"
   printf "    %-12s %s\n" "${s}" "${v}"
 done
 
