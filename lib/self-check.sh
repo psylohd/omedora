@@ -30,22 +30,29 @@ self_check() {
     die "home directory '${home}' does not exist for ${NOKRON_TARGET_USER}"
   fi
   info "target user: ${NOKRON_TARGET_USER} (home=${home})"
-
-  # 3. Plymouth hard dep: nokron theme uses ModuleName=script.
+  # 3. Plymouth hard dep: nokron theme uses ModuleName=script. If it's
+  #    missing and the plymouth stage is enabled, install it now rather
+  #    than aborting — much friendlier when running on a fresh server.
   if ! rpm -q plymouth-plugin-script >/dev/null 2>&1; then
-    die "plymouth-plugin-script is NOT installed.
-  The nokron Plymouth theme uses ModuleName=script which lives in this
-  subpackage. Install it with:
-    sudo dnf5 install plymouth-plugin-script
-  Then re-run this script."
+    if [[ "${NOKRON_STAGE_PLYMOUTH}" == "true" ]]; then
+      warn "plymouth-plugin-script is NOT installed — installing now"
+      dnf5 -y install plymouth-plugin-script \
+        || die "dnf5 install plymouth-plugin-script failed. Run manually:
+  sudo dnf5 install plymouth-plugin-script"
+    else
+      info "plymouth-plugin-script not installed (plymouth stage disabled — skipping)"
+    fi
   fi
 
   # 4. Greetd + greeter user. greetd's RPM creates the 'greeter' user on
-  #    install; we don't fight it, but we verify it exists before wiring.
+  #    install; install greetd now if the greetd stage is enabled and it's
+  #    missing.
   if ! id greeter >/dev/null 2>&1; then
     if [[ "${NOKRON_STAGE_GREETD}" == "true" ]]; then
-      die "the 'greeter' user does not exist. Install greetd first:
-    sudo dnf5 install greetd"
+      warn "the 'greeter' user does not exist — installing greetd now"
+      dnf5 -y install greetd \
+        || die "dnf5 install greetd failed. Run manually:
+  sudo dnf5 install greetd"
     fi
   fi
 
