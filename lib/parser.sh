@@ -11,13 +11,13 @@
 #   OMEDORA_QUICKSHELL=( list )
 #   OMEDORA_APPS=( list )
 #   OMEDORA_APPS_OPTIONAL=( list )
+#   OMEDORA_DOCKER=( list )
 #   OMEDORA_DMS_WEAK_DEPS
-#   OMEDORA_TARGET_USER
-#   OMEDORA_COPRS=( list )
 #   OMEDORA_PATH_PLYMOUTH, OMEDORA_PATH_TUIGREET, OMEDORA_PATH_TUIGREET_SRC
 #   OMEDORA_PATH_HYPRLAND, OMEDORA_PATH_DMS, OMEDORA_PATH_QUICKSHELL
+#   OMEDORA_PATH_NVIM
 #   OMEDORA_DMS_PLUGINS=( list )
-#   OMEDORA_SERVICES_ENABLE=( list )
+#   OMEDORA_HYPRLAND_PLUGINS=( list )   # git URLs cloned into ~/.config/hypr/plugins/
 
 # `set -u` is intentionally NOT enabled — bash version differences between
 # the build host and other systems cause spurious "unbound variable" errors
@@ -69,32 +69,72 @@ meta = cfg.get("meta", {})
 emit("OMEDORA_TARGET_USER", meta.get("target_user", ""))
 emit("OMEDORA_META_NAME", meta.get("name", "omedora"))
 emit("OMEDORA_META_DESCRIPTION", meta.get("description", ""))
+
+# COPR repos
 coprs = cfg.get("coprs", {}).get("enable", [])
 emit("OMEDORA_COPRS", coprs)
+
+# External repos (non-COPR .repo file URLs, e.g. Docker CE)
+_repos = cfg.get("repos", {}).get("enable", [])
+emit("OMEDORA_REPOS", _repos)
 
 # packages
 pkgs = cfg.get("packages", {})
 emit("OMEDORA_HYPRLAND", pkgs.get("hyprland", {}).get("core", []))
+emit("OMEDORA_HYPRLAND_BUILD", pkgs.get("hyprland", {}).get("build", []))
 emit("OMEDORA_QUICKSHELL", pkgs.get("quickshell", {}).get("runtime", []))
 emit("OMEDORA_BUILD", pkgs.get("build", {}).get("required", []))
 apps = pkgs.get("apps", {})
 emit("OMEDORA_APPS", apps.get("required", []))
 emit("OMEDORA_APPS_OPTIONAL", apps.get("optional_copr", []))
 
+# Docker packages from [packages.docker]
+_docker_pkgs = cfg.get("packages", {}).get("docker", {}).get("runtime", [])
+emit("OMEDORA_DOCKER", _docker_pkgs)
+
 # dms from COPR (avengemedia/dms + avengemedia/danklinux)
 dms_cfg = cfg.get("packages", {}).get("dms", {})
 emit("OMEDORA_DMS_WEAK_DEPS", str(bool(dms_cfg.get("install_weak_deps", True))).lower())
 
-# vendored tuigreet (build from source) — under [paths.repo]
-vtg_cfg = cfg.get("paths", {}).get("repo", {})
-emit("OMEDORA_TUIGREET_REPO_URL",  vtg_cfg.get("vendored_tuigreet_repo_url", ""))
-emit("OMEDORA_TUIGREET_BRANCH",    vtg_cfg.get("vendored_tuigreet_branch", ""))
-emit("OMEDORA_TUIGREET_COMMIT",    vtg_cfg.get("vendored_tuigreet_commit", ""))
-
+vendored_cfg = cfg.get("vendored", {})
+vtg_cfg = vendored_cfg.get("tuigreet", {})
+emit("OMEDORA_TUIGREET_REPO_URL",  vtg_cfg.get("repo_url", ""))
+emit("OMEDORA_TUIGREET_BRANCH",    vtg_cfg.get("branch", ""))
+emit("OMEDORA_TUIGREET_COMMIT",    vtg_cfg.get("commit", ""))
 # flatpak
+# Two scopes per the flatpak CLI: `--system` lands apps at /var/lib/flatpak
+# (visible to every user; the only mode that survives a multi-user setup),
+# `--user` lands at ~/.local/share/flatpak (per-user, doesn't show up in
+# other users' launchers). Zen Browser lives on Flathub; we install it
+# system-scope so a fresh, single-user install sees Zen in dms's launcher
+# without needing per-user remote-list bootstrapping.
 fp = cfg.get("flatpak", {})
 emit("OMEDORA_FLATPAK_SYSTEM", fp.get("system", []))
-emit("OMEDORA_FLATPAK_USER", fp.get("user", []))
+emit("OMEDORA_FLATPAK_USER",   fp.get("user", []))
+
+# zen_browser extensions — XPI URLs installed into the Zen Flatpak sandbox.
+# This stays separate from [flatpak]; it's a list of post-install extensions,
+# not Zen's own install location (which is governed by OMEDORA_FLATPAK_SYSTEM
+# above). Empty list = no extensions added.
+zb = cfg.get("zen_browser", {})
+emit("OMEDORA_ZEN_EXTENSIONS", zb.get("extensions", []))
+
+# vendored_repos — .repo files we ship verbatim into /etc/yum.repos.d/.
+# Used when an upstream doesn't host a stable .repo URL (so `dnf5
+# config-manager addrepo --from-repofile` can't fetch them) and we
+# want the contents pinned in-repo. Each entry exposes:
+#   repo_file  — verbatim content of the .repo file
+#   package    — package name to install once the repo is enabled
+# The repo filename is derived from the section key (e.g.
+# `[vendored_repos.vscodium]` → /etc/yum.repos.d/vscodium.repo).
+vr = cfg.get("vendored_repos", {})
+for _name, _entry in vr.items():
+    safe_name = _name.replace("-", "_").replace(" ", "_")
+    emit(f"OMEDORA_VENDORED_REPO_{safe_name.upper()}__FILE",
+         _entry.get("repo_file", ""))
+    emit(f"OMEDORA_VENDORED_REPO_{safe_name.upper()}__PACKAGE",
+         _entry.get("package", ""))
+
 
 # greeter
 g = cfg.get("greeter", {})
@@ -108,30 +148,79 @@ def repo_abs(rel):
     return str(p if p.is_absolute() else (pathlib.Path(root) / p))
 
 p = cfg.get("paths", {}).get("repo", {})
-emit("OMEDORA_PATH_PLYMOUTH", repo_abs(p.get("plymouth", "plymouth")))
-emit("OMEDORA_PATH_TUIGREET", repo_abs(p.get("tuigreet", "tuigreet")))
+emit("OMEDORA_PATH_PLYMOUTH",   repo_abs(p.get("plymouth", "plymouth")))
+emit("OMEDORA_PATH_TUIGREET",   repo_abs(p.get("tuigreet", "tuigreet")))
 emit("OMEDORA_PATH_TUIGREET_SRC", repo_abs(p.get("tuigreet_src", "")))
-emit("OMEDORA_PATH_HYPRLAND", repo_abs(p.get("hyprland", "hyprland")))
-emit("OMEDORA_PATH_DMS", repo_abs(p.get("dms", "DankMaterialShell")))
+emit("OMEDORA_PATH_HYPRLAND",   repo_abs(p.get("hyprland", "hyprland")))
+emit("OMEDORA_PATH_DMS",        repo_abs(p.get("dms", "DankMaterialShell")))
 emit("OMEDORA_PATH_QUICKSHELL", repo_abs(p.get("quickshell", "quickshell")))
+emit("OMEDORA_PATH_WALLPAPERS",  repo_abs(p.get("wallpapers", "wallpapers")))
+emit("OMEDORA_PATH_NVIM",       repo_abs(p.get("nvim", "")))
+
+# [hyprland].monitors — explicit per-monitor `monitor=NAME,WxH@RRR,XxY,SCALE`
+# entries that stage-configs.sh appends to the deployed hyprland.lua.
+# Empty list (the default) means "let dms autodetect on first launch"
+# — see the comment in omedora.toml and the Scaling Note block at the
+# top of hyprland.lua for why this exists.
+hl_cfg = cfg.get("hyprland", {})
+emit("OMEDORA_HYPRLAND_MONITORS", hl_cfg.get("monitors", []))
 
 # dms plugins
 dp = cfg.get("dms_plugins", {})
 emit("OMEDORA_DMS_PLUGINS", dp.get("plugins", []))
 emit("OMEDORA_DMS_REGISTRY", dp.get("registry", []))
 
+# hyprland plugins — git URLs cloned into ~/.config/hypr/plugins/.
+# Each entry is a git URL; the cloned repo lives at
+# ~/.config/hypr/plugins/<basename>.git-stripped>/ and is `require`'d by
+# hyprland.lua via `package.path = package.path .. ";./?.lua;./?/init.lua"`
+# so a plugin named "foo" is `require("plugins.foo")`. Empty list disables
+# the stage.
+hp = cfg.get("hyprland_plugins", {}).get("plugins", [])
+emit("OMEDORA_HYPRLAND_PLUGINS", hp)
+# hyprcapture compositor plugin (hyprpm). `repo_url = ""` disables the stage.
+hc = cfg.get("hyprcapture", {})
+emit("OMEDORA_HYPRCAPTURE_REPO_URL", hc.get("repo_url", ""))
+emit("OMEDORA_HYPRCAPTURE_BRANCH",   hc.get("branch", ""))
+emit("OMEDORA_HYPRCAPTURE_COMMIT",   hc.get("commit", ""))
+
+# userdirs — extra dir names appended to ~/.config/user-dirs.dirs
+# (in addition to the eight standard dirs xdg-user-dirs-update writes).
+userdirs_cfg = cfg.get("userdirs", {})
+emit("OMEDORA_USERDIR_DEV",      userdirs_cfg.get("xdg_dev_dir", "dev"))
+emit("OMEDORA_USERDIR_PROJECTS", userdirs_cfg.get("xdg_projects_dir", "projects"))
+emit("OMEDORA_USERDIR_PROGRAMS", userdirs_cfg.get("xdg_programs_dir", "programs"))
+
+# plymouth device_scale override (0 = script auto-derives from fb_w)
+emit("OMEDORA_PLYMOUTH_DEVICE_SCALE", cfg.get("plymouth", {}).get("device_scale", 0))
+
 # services
 svc = cfg.get("services", {})
 emit("OMEDORA_SERVICES_ENABLE", svc.get("enable", []))
 emit("OMEDORA_SERVICES_DEFAULT", svc.get("set_default", "graphical.target"))
 
-# stages
+# greeter.outputs — per-monitor config list used by stage-greetd.sh
+# to emit `[[outputs]]` blocks in tuigreet's /etc/tuigreet/config.toml.
+# Each entry is a pipe-delimited string so bash can array-append it.
+gr = cfg.get("greeter", {})
+if gr.get("backend", "") == "tuigreet":
+    outputs = gr.get("outputs", [])
+    print("OMEDORA_GREETER_OUTPUTS=( )")
+    for o in outputs:
+        connector = o.get("connector", "").replace("|", " ")
+        enabled   = "true" if o.get("enabled", True)  else "false"
+        primary   = "true" if o.get("primary", False) else "false"
+        print(f"OMEDORA_GREETER_OUTPUTS+=( 'connector={connector}|enabled={enabled}|primary={primary}' )")
+
+# Stage toggles
 stg = cfg.get("stages", {})
 for k, v in stg.items():
-    emit(f"OMEDORA_STAGE_{k.upper()}", "true" if v else "false")
+    # Hyphens are valid in TOML keys (e.g. "hyprland-plugins") but bash
+    # variable names forbid them; emit uses underscores.
+    safe_k = k.upper().replace("-", "_")
+    emit(f"OMEDORA_STAGE_{safe_k}", "true" if v else "false")
 PY
 )"
-
   # Strip python-side stderr if any leaked (none should).
   [[ -n "$dump" ]] || die "TOML parser returned empty output — invalid config?"
 
@@ -173,9 +262,18 @@ require_root() {
   [[ $EUID -eq 0 ]] || die "this must run as root (sudo ./fedora_install.sh)"
 }
 
+# stage_flag_name <name> — canonical "OMEDORA_STAGE_<NAME>" form for a
+# stage's OMEDORA_* flag. Replaces '-' with '_' before uppercasing
+# because bash var names forbid '-' AND bash's ${var^^} only matches
+# letters (a hyphen is left as-is, so ${var^^//-/_} is a no-op).
+stage_flag_name() {
+  printf 'OMEDORA_STAGE_%s' "${1//-/_}" | tr '[:lower:]' '[:upper:]'
+}
+
 run_stage() {
   local name="$1"; shift
-  local flag="OMEDORA_STAGE_${name^^}"
+  local flag
+  flag="$(stage_flag_name "${name}")"
   local on="${!flag:-true}"
   if [[ "$on" != "true" ]]; then
     info "stage '${name}' disabled in omedora.toml — skipping"

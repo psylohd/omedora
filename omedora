@@ -1,0 +1,62 @@
+#!/bin/bash
+# omedora — top-level user-facing dispatcher.
+#
+# Subcommands:
+#   state save    capture live ~/.config/{DankMaterialShell,hypr}/ into repo
+#   state diff    show drift between live and repo without writing
+#   state revert  overwrite live config with repo baseline
+#
+# Stage operations (install.sh / tweaks.sh) are separate entrypoints because
+# they need root. `omedora state` runs as the desktop user and only touches
+# files in the repo + the user's own ~/.config/ — no root required.
+#
+# Run WITHOUT sudo. The script will refuse to run as root for the state
+# subcommand (root's $HOME isn't a usable source of truth).
+
+set -eo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export OMEDORA_REPO_ROOT="${SCRIPT_DIR}"
+
+# shellcheck disable=SC1091
+source "${SCRIPT_DIR}/lib/parser.sh"
+# shellcheck disable=SC1091
+source "${SCRIPT_DIR}/lib/snapshot-state.sh"
+
+if [[ $# -lt 1 ]]; then
+  cat <<USAGE
+omedora — top-level dispatcher (no sudo required)
+
+Usage:
+  omedora state save    Capture live config into the repo (then git commit)
+  omedora state diff    Show what would change without writing
+  omedora state revert  Overwrite live with the repo baseline (destructive)
+
+For full installs / tweaks, run:
+  sudo ./install.sh
+  sudo ./tweaks.sh --list
+USAGE
+  exit 0
+fi
+
+cmd="${1:-}"
+sub="${2:-}"
+
+case "${cmd}" in
+  state)
+    if [[ "${EUID}" -eq 0 ]]; then
+      warn "running as root — state subcommands should run as the desktop user."
+      warn "live config is at \$HOME = ${HOME}; if that's /root, the capture is wrong."
+      read -r -p "continue anyway? [y/N] " _ans
+      [[ "${_ans}" == "y" || "${_ans}" == "Y" ]] || exit 0
+    fi
+    case "${sub}" in
+      save)   state_capture "${HOME}" ;;
+      diff)   state_diff     "${HOME}" ;;
+      revert) state_revert   "${HOME}" ;;
+      *) die "unknown state subcommand: ${sub} (try: save | diff | revert)" ;;
+    esac
+    ;;
+  *)
+    die "unknown command: ${cmd} (try: state)"
+    ;;
+esac

@@ -1,9 +1,20 @@
 {
   "wallpaperCarousel": {
     "enabled": true,
-    "overlayOpacity": 76
+    "overlayOpacity": 71,
+    "borderWidth": 1,
+    "expandMultiplier": 120
   },
   "homeAssistantMonitor": {
+    "enabled": true
+  },
+  "colorPickerDms": {
+    "enabled": true
+  },
+  "dnsSwitcher": {
+    "enabled": true
+  },
+  "minimaxCodeUsage": {
     "enabled": true
   }
 }

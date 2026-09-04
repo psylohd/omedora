@@ -14,6 +14,34 @@ stage_services() {
     return 0
   fi
 
+  # ── Docker group + user membership ──────────────────────────────────────────
+  if ! getent group docker >/dev/null 2>&1; then
+    info "creating docker group"
+    groupadd docker || warn "groupadd docker failed (continuing)"
+  fi
+  if [[ -n "${OMEDORA_TARGET_USER}" ]]; then
+    info "adding ${OMEDORA_TARGET_USER} to docker group"
+    usermod -aG docker "${OMEDORA_TARGET_USER}" \
+      || warn "usermod -aG docker ${OMEDORA_TARGET_USER} failed (continuing)"
+  fi
+
+  # ── libvirt group + user membership ─────────────────────────────────────────
+  # virt-manager and virsh talk to libvirtd over a UNIX socket whose ACL is
+  # the `libvirt` group; without group membership, every guest start pops a
+  # polkit auth prompt. `groupadd -f` is a no-op when the group already exists,
+  # so re-runs are safe. libvirt-daemon's RPM creates this group at install
+  # time, but if the install skipped because @virtualization was already
+  # done in a previous run, we still need to ensure the user is added.
+  if ! getent group libvirt >/dev/null 2>&1; then
+    info "creating libvirt group"
+    groupadd -f libvirt 2>/dev/null || warn "groupadd libvirt failed (continuing)"
+  fi
+  if [[ -n "${OMEDORA_TARGET_USER}" ]] && getent group libvirt >/dev/null 2>&1; then
+    info "adding ${OMEDORA_TARGET_USER} to libvirt group"
+    usermod -aG libvirt "${OMEDORA_TARGET_USER}" \
+      || warn "usermod -aG libvirt ${OMEDORA_TARGET_USER} failed (continuing)"
+  fi
+
   for svc in "${OMEDORA_SERVICES_ENABLE[@]}"; do
     info "enabling ${svc}"
     systemctl enable "${svc}" || warn "failed to enable ${svc} (continuing)"

@@ -1,0 +1,13 @@
+# Runtime / per-user caches from the installed system. These land in
+# the repo working directory when ~/omedora is ~/omedora repo on the
+# same user as the desktop. Don't ship them.
+.cache/
+.local/
+
+# Hyprland runtime files written under ~/.config/hypr but cloned
+# into this repo's working tree sometimes.
+*.hyprlock.swp
+
+# Stray filesystem extraction output. `rpm2cpio foo.rpm | cpio -id`
+# without an explicit target dir writes here. Never commit this.
+usr/

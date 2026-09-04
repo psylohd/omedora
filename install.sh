@@ -31,10 +31,10 @@ export OMEDORA_REPO_ROOT="${SCRIPT_DIR}"
 
 # ── CLI parsing ───────────────────────────────────────────────────────────────
 DRY_RUN=false
+NO_REBOOT=false
 
 ONLY=""
 SKIP=""
-CONFIG_PATH=""
 usage() {
   cat <<USAGE
 Usage: sudo ./install.sh [options]
@@ -44,12 +44,15 @@ Options:
   --dry-run          print what would happen, do nothing
   --only stages      comma-separated list of stages to run (e.g. dnf,vendor)
   --skip stages      comma-separated list of stages to skip
+  --no-reboot        skip the automatic reboot at the end (e.g. for headless
+                     automation that wants to do its own reboot)
   -h, --help         this help
 
 
 Stages (toggleable in omedora.toml [stages]):
   copr, dnf, vendor, flatpak, plymouth, tuigreet, hyprland,
-  quickshell, greetd, dms, services
+  quickshell, greetd, dms, keyring, userdirs, services, hyprland-plugins,
+  hyprcapture
 (configs = plymouth + tuigreet + hyprland + quickshell in one pass;
  plymouth/tuigreet/hyprland/quickshell are also accepted as aliases for configs)
 
@@ -63,6 +66,7 @@ while [[ $# -gt 0 ]]; do
     --dry-run)  DRY_RUN=true; shift ;;
     --only)     ONLY="$2"; shift 2 ;;
     --skip)     SKIP="$2"; shift 2 ;;
+    --no-reboot) NO_REBOOT=true; shift ;;
     -h|--help)  usage; exit 0 ;;
     *)          echo "unknown arg: $1" >&2; usage; exit 2 ;;
   esac
@@ -71,10 +75,14 @@ done
 # ── Load config + helpers ─────────────────────────────────────────────────────
 source "${SCRIPT_DIR}/lib/parser.sh"
 source "${SCRIPT_DIR}/lib/self-check.sh"
-# Source stage functions so `run_stage <name> <fn>` can dispatch to them.
-for _stage in copr dnf vendor flatpak configs greetd dms services; do
+for _stage in copr dnf vendor flatpak configs greetd dms keyring userdirs services hyprland-plugins hyprcapture wallpapers; do
   source "${SCRIPT_DIR}/lib/stage-${_stage}.sh"
 done
+
+# Monitor detection (used by stage-greetd.sh to default-enable the
+# largest connected output). Doesn't read /sys itself unless called —
+# pure functions + raw sysfs reads at the moment of invocation.
+source "${SCRIPT_DIR}/lib/detect-monitors.sh"
 
 load_config
 
@@ -89,8 +97,9 @@ apply_stage_filter() {
   # 'configs' stage (which runs all four in one pass). The iteration list
   # below contains both names so users can pass either via --only.
   if [[ -n "${ONLY}" ]]; then
-    for s in copr dnf vendor flatpak plymouth tuigreet hyprland quickshell configs greetd dms services; do
-      printf -v "OMEDORA_STAGE_${s^^}" "false"
+
+    for s in copr dnf vendor flatpak plymouth tuigreet hyprland quickshell configs greetd dms keyring userdirs services hyprland-plugins hyprcapture wallpapers; do
+      printf -v "$(stage_flag_name "${s}")" "false"
     done
     IFS=',' read -ra list <<< "${ONLY}"
     for s in "${list[@]}"; do
@@ -118,8 +127,18 @@ apply_stage_filter() {
           printf -v "OMEDORA_STAGE_DNF" "true"
           printf -v "OMEDORA_STAGE_VENDOR" "true"
           printf -v "OMEDORA_STAGE_DMS" "true" ;;
+        hyprland-plugins)
+          # Pure-Lua Hyprland plugins (cloned to ~/.config/hypr/plugins/).
+          printf -v "OMEDORA_STAGE_HYPRLAND_PLUGINS" "true" ;;
+        hyprcapture)
+          printf -v "OMEDORA_STAGE_DNF" "true"
+          printf -v "OMEDORA_STAGE_HYPRCAPTURE" "true" ;;
+        wallpapers)
+          # Pure file copy, no dependencies. Uses OMEDORA_PATH_WALLPAPERS.
+          printf -v "OMEDORA_STAGE_WALLPAPERS" "true" ;;
         *)
-          local var="OMEDORA_STAGE_${s^^}"
+          local var
+          var="$(stage_flag_name "${s}")"
           printf -v "${var}" "true" ;;
       esac
     done
@@ -128,7 +147,7 @@ apply_stage_filter() {
 if [[ -n "${SKIP}" ]]; then
   IFS=',' read -ra list <<< "${SKIP}"
   for s in "${list[@]}"; do
-    var="OMEDORA_STAGE_${s^^}"
+    var="$(stage_flag_name "${s}")"
     printf -v "${var}" "false"
   done
 fi
@@ -148,17 +167,15 @@ case "${OMEDORA_GREETER_BACKEND}" in
 esac
 
 # ── Plan ──────────────────────────────────────────────────────────────────────
+
 section "omedora ${OMEDORA_META_NAME}"
 echo "  target user: ${OMEDORA_TARGET_USER}"
 echo "  greeter:     ${OMEDORA_GREETER_BACKEND}"
 echo "  repo root:   ${OMEDORA_REPO_ROOT}"
 echo "  config:      ${OMEDORA_CONFIG}"
-echo
-echo "  stages:"
-for s in copr dnf vendor flatpak plymouth tuigreet hyprland quickshell greetd dms services; do
-  f="OMEDORA_STAGE_${s^^}"
+for s in copr dnf vendor flatpak plymouth tuigreet hyprland quickshell greetd dms keyring userdirs services hyprland-plugins hyprcapture wallpapers; do
+  f="$(stage_flag_name "${s}")"
   v="${!f:-false}"
-  # configs is the parent of the sub-stages; show it too.
   if [[ "${s}" == "plymouth" ]] || [[ "${s}" == "tuigreet" ]] || \
      [[ "${s}" == "hyprland" ]] || [[ "${s}" == "quickshell" ]]; then
     [[ "${v}" == "true" ]] && parent="(via configs)" || parent=""
@@ -182,10 +199,13 @@ run_stage flatpak    stage_flatpak
 run_stage greetd     stage_greetd       # wire /etc/greetd/config.toml + start-hyprland
 run_stage configs    stage_configs      # plymouth + tuigreet + hyprland + quickshell in one pass
 run_stage dms        stage_dms          # DankMaterialShell config + plugins
+run_stage hyprland-plugins stage_hyprland_plugins  # clone Lua plugins to ~/.config/hypr/plugins/
+run_stage hyprcapture stage_hyprcapture  # hyprpm add HyprCapture + build .so + helper
+run_stage keyring    stage_keyring      # GNOME keyring auto-unlock at greetd login
+run_stage userdirs   stage_user_dirs    # default XDG dirs + custom dev/projects/programs
 run_stage services   stage_services
-
+run_stage wallpapers stage_wallpapers     # repo wallpapers/ → $HOME/Pictures/wallpapers/
 # ── Done ──────────────────────────────────────────────────────────────────────
-section "complete"
 cat <<DONE
 
 Next steps:
@@ -204,3 +224,26 @@ All installed files live under:
 
 Backups of overwritten files have timestamped .bak.<date> suffixes.
 DONE
+
+# ── Auto-reboot ──────────────────────────────────────────────────────────────
+# Greetd is system-level and won't see its new /etc/greetd/config.toml + the
+# freshly-installed Hyprland binary unless the kernel brings everything up
+# from scratch. The user shouldn't have to type `sudo systemctl reboot` —
+# we do it for them, with a 5-second grace period for anyone reading the
+# install log tail on a serial console.
+#
+# Skipped automatically when --dry-run is set, when the user has the
+# OMEDORA_NO_REBOOT=1 env var (used by CI / tweaks.sh), or when not on a
+# TTY (so headless ssh invocations don't accidentally reboot the box).
+if ${DRY_RUN} || ${NO_REBOOT}; then
+  info "--dry-run / --no-reboot — skipping automatic reboot. Run \`sudo systemctl reboot\` to finish."
+elif [[ ! -t 1 ]]; then
+  # not a TTY (e.g. piped to a file or run from systemd): don't surprise
+  # whoever's downstream by yanking the machine out from under them.
+  warn "non-TTY invocation — automatic reboot suppressed. Run \`sudo systemctl reboot\` when ready."
+else
+  echo
+  echo -e "${RED}Rebooting in 5 seconds. Ctrl-C to cancel.${RST}"
+  sleep 5
+  systemctl reboot || warn "systemctl reboot failed (returned $?). Run it manually."
+fi

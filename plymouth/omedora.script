@@ -1,5 +1,21 @@
-# Nokron Plymouth Theme - FEDORA ASCII wordmark on Tokyo Night background.
-# Replicates the Omarchy script-module style with Fedora branding.
+# omedora Plymouth Theme - FEDORA wordmark on Tokyo Night background.
+# Adapted from Omarchy's omarchy.script (which is in turn the upstream
+# shipped splash-screen format used by every Hyprland-with-plymouth
+# distribution: HyDE, JaKooLit, end-4 dotfiles, etc.).
+#
+# Multi-monitor note: Plymouth's script.so plugin exposes only
+# Window.GetWidth/Height (the total framebuffer size), with no per-
+# output enumeration API. Centering is done at the framebuffer
+# midpoint and that's it - matching upstream behavior. The actual
+# framebuffer that Plymouth draws on is whatever the kernel exposes
+# at boot, which on modern EFI systems is typically the single monitor
+# the firmware handed to gop. Multi-head simultaneous Plymouth is not
+# really a thing on regular desktops; if you ever hit a case where the
+# splash is off-center because your firmware gave Plymouth a stitched
+# framebuffer, set [plymouth].device_scale in omedora.toml and the
+# install will write DeviceScale=N into /etc/plymouth/plymouthd.conf,
+# which divides all Window.GetWidth/Height reports by N inside
+# plymouthd before they reach the script.
 
 # Background: #1a1b26 (Tokyo Night)
 Window.SetBackgroundTopColor(0.102, 0.106, 0.149);    # 0x1A1B26

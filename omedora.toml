@@ -26,9 +26,49 @@ enable = [
   "lionheartp/Hyprland",          # the Hyprland stack on Fedora 43/44/45
   "leloubil/wl-clip-persist",     # Wayland clipboard persistence
   "tofik/nwg-shell",              # nwg-look + nwg-displays
-  "scottames/ghostty",            # ghostty (not in Fedora's default repos)
+  # NOTE: ghostty also lives in scottames/ghostty as a dedicated COPR, but
+  # that COPR conflicts with avengemedia/danklinux's ghostty (different
+  # patchsets, both ship ghostty). With BOTH enabled dnf5 refuses to
+  # resolve the install on a fresh box — an earlier run on a VM dropped
+  # ghostty entirely for that reason. We rely on danklinux's copy; if
+  # that COPR ever stops shipping ghostty, re-enable scottames/ghostty
+  # AND audit for conflicts with danklinux before re-enabling.
 ]
-# ── Packages ──────────────────────────────────────────────────────────────────
+# Plymouth DeviceScale
+# Plymouth's script.so plugin exposes only Window.GetWidth/Height
+# (the total framebuffer size) - no per-output enumeration API. All
+# standard splashes, including Omarchy's, center on the framebuffer
+# midpoint with `Window.GetWidth() / 2`. On most hardware that IS the
+# only visible monitor at boot (the kernel/EFI haven't initialized
+# multi-monitor KMS yet) and the splash sits dead-center. For hardware
+# where the firmware hands Plymouth a stitched multi-head framebuffer,
+# DeviceScale > 1 divides the reported width inside plymouthd BEFORE
+# it reaches the script, recovering single-monitor semantics:
+#   1 - single 1920-wide monitor (the Omarchy default)
+#   2 - 3840-wide stitched framebuffer = two 1920 monitors
+#   3 - 5K-class 5120-wide stitched
+# device_scale = 0 keeps the system default (no entry written), which
+# in practice equals 1 on the hardware Plymouth actually runs against.
+[plymouth]
+device_scale = 0
+
+# ── External repos (non-COPR) ───────────────────────────────────────────────────
+# Each entry is a URL to a .repo file fetched by dnf5 config-manager addrepo.
+# Docker CE is the only current use; the installer adds the repo then installs
+# the packages listed in [packages.docker].
+[repos]
+enable = [
+  "https://download.docker.com/linux/fedora/docker-ce.repo",
+]
+
+# ── Packages from external repos ────────────────────────────────────────────────
+[packages.docker]
+runtime = [
+  "docker-ce", "docker-ce-cli", "containerd.io",
+  "docker-buildx-plugin", "docker-compose-plugin",
+]
+
+# ── Packages  ──────────────────────────────────────────────────────────────────
 [packages.hyprland]
 # All from lionheartp/Hyprland COPR (must be enabled first).
 core = [
@@ -43,6 +83,60 @@ core = [
   "hyprpaper", "hyprlock", "hypridle", "hyprshot", "hyprpicker",
   "hyprsunset", "hyprsysteminfo", "hyprlauncher", "hyprshutdown",
 ]
+
+# ── HyprCapture / hyprpm toolchain + runtime deps ────────────────────────────
+# hyprpm (Hyprland's plugin manager) is shipped inside the `hyprland` RPM at
+# /usr/bin/hyprpm — no separate package entry. The `add` step clones a plugin
+# repo and runs CMake itself, so this stage needs the build toolchain AND the
+# plugin's transitive deps on the host:
+#   cmake / gcc-c++ / git   — required for hyprpm add to compile the .so
+#   hyprland-devel          — Hyprland plugin headers; mandatory on Hyprland ≥0.45
+#   hyprlang-devel          — HyprCapture's Lua config binding uses hyprlang
+#   hyprwayland-scanner     — HyprCapture CMake invokes the scanner binary
+#   wl-clipboard            — stable Wayland clipboard writes (wl-copy fallback)
+#   ffmpeg                  — recording encoder for mp4/webm/mkv/gif/apng/webp
+#   libnotify               — used by notification_backend = "system" (optional
+#                             path; HyprCapture falls back to the Hyprland
+#                             overlay notification on libnotify failure).
+# Anything listed here is installed by stage-dnf.sh's existing `[packages.build]
+# .required` slot via the new `build` field below (auto-wired by parser.sh).
+build = [
+  "cmake",
+  "gcc-c++",
+  "git",
+  "hyprland-devel",
+  "hyprwayland-scanner",
+  "hyprlang-devel",
+  "nlohmann-json-devel",
+  "wl-clipboard",
+  "ffmpeg",
+  "libnotify",
+]
+# ── Per-monitor overrides (optional) ─────────────────────────────────────────
+# dms writes `monitor=NAME,WxH@RRR,XxY,SCALE` lines into
+# ~/.config/hypr/dms/outputs.lua on first launch. If your monitor is
+# HiDPI and the first boot looks mis-scaled, set explicit entries here
+# and the installer will append them to the deployed hyprland.lua so
+# they are honoured before dms has a chance to autodetect.
+#
+# Format: each entry is "<name>,<width>x<height>@<refresh>,<x>x<y>,<scale>"
+#   * name      — Hyprland connector name (DP-1, HDMI-A-1, eDP-1, ...).
+#                 Run `hyprctl monitors` after first boot to discover.
+#   * width/height/refresh — preferred mode. Use `auto` to let Hyprland
+#                 pick the highest available rate.
+#   * x/y       — monitor position in the global layout. 0x0 for the
+#                 primary; offsets in pixels for additional monitors.
+#   * scale     — 1.0 for standard density, 1.5 for HiDPI laptops,
+#                 2.0 for 4K displays, etc.
+#
+# Examples:
+#   "eDP-1,2880x1800@120,0x0,2"
+#   "DP-1,auto,2880x0,1"
+#   "HDMI-A-1,1920x1080@60,5760x0,1"
+#
+# Empty list (default) means "let dms handle it on first launch".
+[hyprland]
+monitors = []
 [packages.quickshell]
 # All from official Fedora. quickshell 0.2.1 ships in F44.
 runtime = [
@@ -73,6 +167,8 @@ required = [
   "gnome-disk-utility",             # GNOME Disks
   "loupe",                          # GNOME image viewer
   "gnome-text-editor",              # GNOME Text Editor
+  # Editors
+  "neovim",                        # Neovim (LazyVim config deployed by stage-configs)
   # Wayland helpers
   "xwayland-satellite",             # rootless Xwayland
   # Login stack
@@ -82,16 +178,84 @@ required = [
   "pavucontrol",
   # Power / night light / clipboard
   "power-profiles-daemon", "wlsunset",
-  # Portals / XDG
-  "xdg-desktop-portal-gtk", "xdg-user-dirs",
-  # Shell + tools
-  "fish", "fastfetch", "grim", "slurp",
-  "ghostty", "qt6ct",
-  "playerctl", "gnome-keyring",
-  # Boot splash
+  # Secrets + XDG helpers
+  #   gnome-keyring       — provides the keyring D-Bus service, secrets storage
+  #   gnome-keyring-pam   — provides /usr/lib64/security/pam_gnome_keyring.so,
+  #                         which /etc/pam.d/greetd (Fedora-shipped) already
+  #                         references as `-auth optional pam_gnome_keyring.so`.
+  #                         Without this package the PAM line is a no-op and
+  #                         every browser launch prompts for the keyring
+  #                         password. With it, the keyring unlocks silently
+  #                         at greetd login.
+  #   xdg-user-dirs        — generates ~/Documents, ~/Pictures, etc. by
+  #                         writing ~/.config/user-dirs.dirs. The userdirs
+  #                         stage calls `xdg-user-dirs-update --force`.
+  #   xdg-utils            — xdg-mime / xdg-open / xdg-settings; provides
+  #                         "what app opens this file" for Hyprland-style
+  #                         file managers.
+  "gnome-keyring",
+  "gnome-keyring-pam",
+  "xdg-user-dirs",
+  "xdg-utils",
+  # desktop-file-utils provides `update-desktop-database`, which
+  # stage-flatpak.sh runs after every flatpak install so dms /
+  # xdg-desktop-portal can see fresh .desktop entries without a
+  # re-login. On a bare Fedora Server install this isn't pulled in
+  # transitively by anything else we install, so we list it here.
+  "desktop-file-utils",
+  # pciutils provides `lspci`, which hyprland/startup.lua uses at
+  # config-load time to auto-detect NVIDIA GPUs (vendor 10de) and
+  # enable the NVIDIA-specific WLR_NO_HARDWARE_CURSORS=1 + GBM_BACKEND
+  # =nvidia-drm env vars. Without pciutils the autodetect is a no-op
+  # and on NVIDIA hardware the cursor renders with the broken hw
+  # cursor path (the "cursor flashes" symptom).
+  "pciutils",
   "plymouth", "plymouth-plugin-script",   # plugin-script is required by omedora theme
-  "papirus-icon-theme" # Icon pack
+  "papirus-icon-theme", # Icon pack
+
+  # ghostty — SUPER+RETURN terminal launch target. Originally a weak-dep
+  # of dms from avengemedia/danklinux, but dnf5 occasionally skips weak
+  # deps on a transaction conflict. Listing explicitly removes the bet.
+  "ghostty",
+  # codium — VScodium (open-source MSVSCode build). Requires the
+  # [vendored_repos.vscodium] .repo to be written by stage_dnf first;
+  # both are sequenced in lib/stage-dnf.sh.
+  "codium",
+  # KVM/libvirt stack — pulled in as the @virtualization dnf5 group
+  # (libvirt-daemon, qemu-kvm, virt-install, virt-manager, etc.). The
+  # libvirtd.service unit fires on first boot via [services].enable.
+  "@virtualization",
 ]
+# ── Vendored source builds ─────────────────────────────────────────────────────
+# tuigreet is built from a git fork at install time. The vendor stage clones
+# it, runs `cargo build --release`, and installs the binary to /usr/local/bin/.
+# branch defaults to "master" — change if the fork uses a different base.
+[vendored.tuigreet]
+repo_url = "https://github.com/psylohd/tuigreet.git"
+branch   = "master"
+commit   = ""        # optional: pin to a specific commit hash
+
+# ── Vendored .repo files ──────────────────────────────────────────────────────
+# Used when an upstream project doesn't host a `.repo` file at a stable URL
+# (so `dnf5 config-manager addrepo --from-repofile` can't fetch them) and we
+# want the repo definition pinned in-repo. Each entry:
+#
+#   repo_file  — verbatim content written to /etc/yum.repos.d/<name>.repo
+#   package    — package name installed after the repo is written
+#
+# Repo is loaded BEFORE the package install, so dnf5 sees it on first try.
+[vendored_repos.vscodium]
+repo_file = '''
+[gitlab.com_paulcarroty_vscodium_repo]
+name=gitlab.com_paulcarroty_vscodium_repo
+baseurl=https://paulcarroty.gitlab.io/vscodium-deb-rpm-repo/rpms/
+enabled=1
+gpgcheck=1
+repo_gpgcheck=1
+gpgkey=https://gitlab.com/paulcarroty/vscodium-deb-rpm-repo/raw/master/pub.gpg
+metadata_expire=1h
+'''
+package = "codium"
 
 optional_copr = [
   "wl-clip-persist",                # from leloubil/wl-clip-persist
@@ -112,14 +276,37 @@ optional_copr = [
 # --setopt=install_weak_deps=False to skip them.
 install_weak_deps = true
 
+# ── Flatpak apps ──────────────────────────────────────────────────────────────
+# Apps distributed only on Flathub (no dnf equivalent on Fedora). We
+# install system-scope so the desktop user's launcher / dms menu sees
+# them without per-user remote-list bootstrapping.
+#
+#   system — installed under /var/lib/flatpak, visible to every user.
+#            Use this for shared infrastructure (Zen Browser).
+#   user   — installed under ~/.local/share/flatpak for the desktop user
+#            only. `stage_flatpak` adds the per-user flathub remote when
+#            this list is non-empty.
 [flatpak]
-# Per-user browsers (Zen) live under `user` so they install into
-# ~/.local/share/flatpak, are owned by the desktop user, and don't
-# bleed into other accounts. Use `system` only for things every user
-# on the box genuinely needs (codecs, fonts, system helpers).
-system = []
+system = [
+  "app.zen_browser.zen",          # Zen Browser — every fresh box
+]
 user = [
-  "app.zen_browser.zen",            # Zen Browser (not in any dnf repo)
+]
+[zen_browser]
+# Extensions installed into the Zen Browser Flatpak after it is deployed.
+# Each entry is an XPI URL. Extensions are installed per-user inside the
+# sandbox via Zen's native extension management API (no policy, no restart
+# required, no external tooling). XPIs are fetched and injected inside the
+# sandbox — the host never sees the raw XPI.
+#
+# Example entries:
+#   "https://addons.mozilla.org/firefox/downloads/latest/noscript/latest.xpi"
+#   "https://addons.mozilla.org/firefox/downloads/latest/bitwarden-password-manager/latest.xpi"
+#   "https://addons.mozilla.org/firefox/downloads/latest/ublock-origin/latest.xpi"
+extensions = [
+  "https://addons.mozilla.org/firefox/downloads/latest/noscript/latest.xpi",
+  "https://addons.mozilla.org/firefox/downloads/latest/bitwarden-password-manager/latest.xpi",
+  "https://addons.mozilla.org/firefox/downloads/latest/ublock-origin/latest.xpi",
 ]
 # ── DMS plugins ───────────────────────────────────────────────────────────────
 # Two sources, both installed by the dms stage:
@@ -138,6 +325,37 @@ plugins = [
 registry = [
   # "dankQuickSearch",   # quickshell UI launcher plugin (NOT the danksearch binary)
 ]
+# ── Hyprland plugins (pure-Lua packages, no compile, no hyprpm) ─────────────
+# Cloned by the hyprland-plugins stage into ~/.config/hypr/plugins/<name>/.
+# Each entry is a git URL. Optional pin via the pipe-delimited form
+# "<url>|<branch>|<commit>" ("|" is not valid in git URLs so the split is
+# unambiguous). To enable a plugin after install, edit ~/.config/hypr/
+# hyprland.lua and uncomment the matching `require("plugins.<name>")`
+# line; then call its setup() and wire binds per the plugin's README.
+#
+# Currently enabled:
+#   split-monitor-workspaces — awesome/dwm-style independent workspace
+#     numbering per monitor (zjeffer/split-monitor-workspaces).
+#     https://github.com/zjeffer/split-monitor-workspaces
+[hyprland_plugins]
+plugins = [
+  "https://github.com/zjeffer/split-monitor-workspaces",
+]
+# ── HyprCapture compositor plugin (hyprpm) ────────────────────────────────────
+# HyprCapture is a Hyprland-only screenshot/recording plugin. It is built and
+# installed by `hyprpm add <repo>` (see lib/stage-hyprcapture.sh) and exposes
+# Lua actions under hl.plugin.hyprcapture.* — we bind those to PrintScreen in
+# hyprland/dms/binds-user.lua. Set repo_url = "" to skip the plugin entirely.
+#
+# Pin form: "url|branch|commit" — pipe is not valid in git URLs so the split
+# is unambiguous. Empty branch + empty commit = "track upstream HEAD".
+# The build deps (cmake, gcc-c++, hyprland-devel, nlohmann-json-devel,
+# wl-clipboard, ffmpeg, libnotify) are installed by stage-dnf.sh via the
+# `[packages.hyprland].build` list above; do not duplicate them here.
+[hyprcapture]
+repo_url = "https://github.com/gfhdhytghd/HyprCapture"
+branch   = "main"
+commit   = ""
 # ── Config trees ──────────────────────────────────────────────────────────────
 # Drop each tree into target_user's $HOME with timestamped .bak on conflict.
 [paths.repo]
@@ -145,11 +363,9 @@ plymouth   = "plymouth"           # → /usr/share/plymouth/themes/omedora
 tuigreet   = "tuigreet"           # → /etc/tuigreet  + /usr/local/bin/tuigreet
 tuigreet_src = ""                 # legacy: path to a pre-cloned Cargo workspace
 hyprland   = "hyprland"           # → $HOME/.config/hypr
+nvim       = "nvim"            # → $HOME/.config/nvim (LazyVim)
 dms        = "DankMaterialShell"  # → $HOME/.config/DankMaterialShell
-quickshell = "quickshell"         # → $HOME/.config/quickshell (dms wraps this)
-vendored_tuigreet_repo_url = "https://github.com/psylohd/tuigreet.git"
-vendored_tuigreet_branch   = "tweak"
-vendored_tuigreet_commit   = ""
+wallpapers = "wallpapers"        # → $HOME/Pictures/wallpapers/ (flattened; theme subdirs are dropped)
 # ── Greeter
 # backend = "tuigreet"     — current Rust build under [vendored.tuigreet]
 # The exact command + user are hardcoded in lib/stage-greetd.sh so the
@@ -166,19 +382,50 @@ backend = "tuigreet"
 enable = [
   "greetd.service",
   "plymouth-start.service",
+  "docker.service",
+  # libvirtd.service — KVM/libvirt daemon. The @virtualization dnf5
+  # group installs libvirt-daemon but does not start it — this is the
+  # start-enable bit. virt-manager (also in @virtualization) talks to
+  # this socket; the desktop user is added to the `libvirt` group in
+  # lib/stage-services.sh so they skip the libvirt auth polkit prompt
+  # on every guest launch.
+  "libvirtd.service",
 ]
 set_default = "graphical.target"
 
-# ── Stage toggles ─────────────────────────────────────────────────────────────
-[stages]
-copr      = true
-dnf       = true
-vendor    = true
-flatpak   = true
-plymouth  = true
-tuigreet  = true
-hyprland  = true
-quickshell = true
-greetd     = true
-dms        = true
-services   = true
+# ── Custom XDG user dirs ──────────────────────────────────────────────────────
+# `xdg-user-dirs-update --force` generates the eight standard dirs
+# (Desktop/Documents/Downloads/Music/Pictures/Public/Templates/Videos) and
+# writes ~/.config/user-dirs.dirs. omedora appends three extra dirs that
+# xdg-user-dirs-update does NOT natively support — each is created on first
+# run if missing. They are referenced everywhere in this repo and are not
+# optional.
+#
+#   $HOME/dev       — throwaway test repos, exploration, scratch
+#   $HOME/projects  — ongoing personal projects
+#   $HOME/programs  — symlinked bins, compiled-from-source, scripts
+#
+# Removing a custom dir here after install will not delete the on-disk
+# directory; it only stops reverting the .dirs file on reruns.
+[userdirs]
+xdg_dev_dir       = "dev"
+xdg_projects_dir  = "projects"
+xdg_programs_dir  = "programs"
+
+ # ── Stage toggles ─────────────────────────────────────────────────────────────
+ [stages]
+ copr      = true
+ dnf       = true
+ vendor    = true
+ flatpak   = true
+ plymouth  = true
+ tuigreet  = true
+ hyprland  = true
+ quickshell = true
+keyring   = true    # Enable pam_gnome_keyring in PAM + start --components=secrets
+userdirs  = true    # xdg-user-dirs-update --force + custom dirs (dev/projects/programs)
+services  = true    # systemctl enable + default target
+hyprland-plugins = true   # clone Lua plugins to ~/.config/hypr/plugins/
+nvim      = true    # Neovim / LazyVim config
+hyprcapture = true    # hyprpm add HyprCapture + build .so + install helper
+wallpapers = true    # repo wallpapers/ → $HOME/Pictures/wallpapers/ (flattened, .bak on overwrite)

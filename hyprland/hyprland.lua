@@ -22,34 +22,82 @@ local dms_env = {
     "MOZ_ENABLE_WAYLAND,1",
     "_JAVA_AWT_WM_NONREPARENTING,1",
     "ELECTRON_OZONE_PLATFORM_HINT,wayland",
+    -- XDG_DATA_DIRS: include the flatpak export roots so dms /
+    -- xdg-desktop-portal can enumerate flatpak .desktop files
+    -- without scanning the whole filesystem. Default Fedora value
+    -- is "/usr/local/share:/usr/share"; we append both flatpak
+    -- export trees. The user-scope one resolves at runtime against
+    -- $HOME, so `${HOME}` is substituted literally — Hyprland's
+    -- hl.env does NOT expand env vars, so we hardcode the prefix
+    -- for the system scope and let the user scope inherit from
+    -- dbus-update-activation-environment (which systemd evaluates
+    -- $HOME against).
+    "XDG_DATA_DIRS,/usr/local/share:/usr/share:/var/lib/flatpak/exports/share",
 }
 for _, item in ipairs(dms_env) do
     local key, value = item:match("^([^,]+),(.+)$")
     if key and value then hl.env(key, value) end
 end
-
 hl.on("hyprland.start", function()
 	hl.exec_cmd("dbus-update-activation-environment --systemd --all")
 	hl.exec_cmd("systemctl --user start hyprland-session.target")
-	require("startup")  -- sets exec_once list (dms run, polkit, easyeffects, ...)
+	-- dms.service: the user manager evaluates Wants/Requisite at
+	-- evaluation time, not continuously. `hyprland-session.target`'s
+	-- BindsTo activates graphical-session.target AFTER dms.service's
+	-- first eval (the user manager is racing Hyprland's init hook).
+	-- Without this explicit start, dms.service ends up
+	-- `inactive (dead)` with `result 'dependency'` on the first
+	-- login after a fresh install — the symlink plus the BindsTo=
+	-- chain eventually fires, but systemd caches the first failed
+	-- evaluation and does not retry.
+	-- Idempotent on subsequent logins: `start` on an already-active
+	-- unit is a no-op, so this doesn't cause the dms double-launch
+	-- the explicit start was once thought to risk.
+	hl.exec_cmd("systemctl --user start dms.service")
+	require("startup")  -- sets exec_once list (polkit, easyeffects, wl-clip-persist, ...)
 end)
--- DMS_STARTUP_END
+-- Inputs (keyboard, mouse, touchpad, gestures) live in inputs.lua.
+-- hyprland.lua does NOT call hl.config({ input = ... }) — calling it
+-- twice either replaces the table wholesale (older Hyprland) or merges
+-- in undefined order (newer Lua config), which previously left
+-- follow_mouse = 0 in this file overwritten by follow_mouse = 1 in
+-- inputs.lua (or vice versa) and produced the "auto-focus on hover"
+-- symptom. inputs.lua is the single source of truth.
+--
+-- general / decoration / dwindle / master / misc defaults live here
+-- because they are not user-overridable at runtime; if you want to
+-- tweak them, edit this block and `hyprctl reload`.
+--
+-- xdg-desktop-portal / cursor settings: XDG_DATA_DIRS and friends are
+-- exported at the top of this file (see the dms_env table above).
+-- Flatpak installs dump `.desktop` files into /var/lib/flatpak/exports/
+-- share/applications and ~/.local/share/flatpak/exports/share/
+-- applications — those directories MUST be in XDG_DATA_DIRS for dms
+-- to see them via xdg-desktop-portal. stage-flatpak.sh also runs
+-- update-desktop-database after installs so the desktop cache is
+-- populated even before the user logs in again.
 hl.config({
-	input = {
-		-- empty inherits XKB_DEFAULT_LAYOUT (libxkbcommon), falls back to "us"
-		kb_layout = "",
-		numlock_by_default = true,
-		follow_mouse = 0,
-		touchpad = {
-			tap_to_click = true,
-			natural_scroll = true,
-		},
-	},
+	-- Per-workspace layout is owned by dms (it writes
+	-- hl.workspace_rule(workspace=ID, layout=...) entries into
+	-- dms/layout.lua on first launch). The previous `layout =
+	-- "dwindle"` set here conflicted with dms's per-workspace rules
+	-- and produced the "window arrangement is unpredictable"
+	-- symptom: some workspaces got dwindle (from this default),
+	-- others got scrolling (from dms), and toggling SUPER+L
+	-- scrambled the rest. Remove the layout key here; dms is the
+	-- single source of truth for layout.
 	general = {
 		gaps_in = 5,
 		gaps_out = 5,
 		border_size = 2,
-		layout = "dwindle",
+		-- Click-and-drag on window borders / gaps to resize. Pairs
+		-- with SUPER + mouse:272 → window.drag() in dms/binds-user.lua
+		-- for rearranging tiled windows (drag-and-move within the
+		-- layout, not float-and-move). Without this flag, the
+		-- border is purely visual and only SUPER+Q (close) /
+		-- SUPER+F (fullscreen) / SUPER+T (float toggle) are usable
+		-- from the mouse — everything else needs the keyboard.
+		resize_on_border = true,
 	},
 	decoration = {
 		rounding = 12,
@@ -67,14 +115,33 @@ hl.config({
 		disable_hyprland_logo = true,
 		disable_splash_rendering = true,
 	},
-	dwindle = {
-		preserve_split = true,
-	},
 	master = {
 		mfact = 0.5,
 	},
+	-- binds: see https://wiki.hypr.land/configuring/core/binds/.
+	-- drag_threshold is the cursor-movement (in px) required before
+	-- a SUPER + mouse:272 press is treated as a drag rather than a
+	-- click. 0 = treat every press as drag immediately; a small value
+	-- (~10) lets a plain click on a tiled window still focus it
+	-- without inadvertently dragging it across the layout. Hyprland's
+	-- default is 0; we set 10 to make "click to focus" reliable.
+	binds = {
+		drag_threshold = 10,
+	},
 })
-
+-- Scaling note: Hyprland sets per-monitor scale via `monitor=NAME,
+-- WIDTHxHEIGHT@RRR, POSITION, SCALE` lines. omedora does NOT emit
+-- those lines by default — dms writes them on first launch into
+-- dms/outputs.lua (which we safe_require below). The first boot will
+-- therefore render at 1x on every monitor, and dms will read the
+-- current scale and rewrite dms/outputs.lua on the second boot. If
+-- your hardware is HiDPI and the first boot looks tiny/huge, hit
+-- SUPER+R (reload) after dms has had ~3 seconds to write outputs.lua
+-- OR set explicit monitor scale in omedora.toml's [hyprland].monitors
+-- list — see omedora.toml for the format. This is the root cause of
+-- the "scaling between dms and Hyprland windows doesn't match"
+-- symptom on a fresh install.
+--
 -- Snappy animations. Use linear/quick curves (fast ramp, no long easing tail)
 -- and high speeds. appleEaseInOut's symmetric shape felt slow even at 20x;
 -- linear with high speed feels instant while still having a visible transition.
@@ -130,17 +197,95 @@ hl.layer_rule({ match = { namespace = "^dms:.*" }, no_anim = true })
 -- fresh install where dms hasn't run yet. dms/binds.lua and
 -- dms/binds-user.lua ARE shipped in the repo (binds is the upstream
 -- default, binds-user is our override), so those require normally.
+-- inputs.lua ships the keyboard layout, touchpad tuning, AND trackpad
+-- gestures via hl.gesture(); it's required unconditionally so gestures
+-- are active on the very first boot.
 local function safe_require(mod)
-	local ok, err = pcall(require, mod)
+	local ok, result = pcall(require, mod)
 	if not ok then
 		-- Will be picked up on the next hyprctl reload, once dms has
 		-- written the file from its first-launch theme/monitor logic.
-		print(string.format("[hyprland] deferring require(\"%s\"): %s", mod, err))
+		print(string.format("[hyprland] deferring require(\"%s\"): %s", mod, result))
+		return nil
 	end
+	return result
 end
+-- ── Lua plugins ──────────────────────────────────────────────────────────────
+-- Third-party Hyprland "plugins" that ship as plain Lua packages (no C++
+-- compilation, no hyprpm) live under ~/.config/hypr/plugins/<name>/ and
+-- are loaded here. The lib/stage-hyprland-plugins.sh stage clones each
+-- [hyprland_plugins].plugins entry into that directory at install time;
+-- this file is responsible for requiring + configuring them.
+--
+-- If the plugin dir is missing (e.g. user applied tweaks.sh hyprland
+-- before ever running install.sh / the hyprland-plugins stage), fall
+-- back to a no-op stub so Hyprland doesn't trip emergency mode. The
+-- user runs install.sh (or tweaks.sh hyprland-plugins) to clone the
+-- plugin and `hyprctl reload`.
+-- Derive this file's directory so package.path is independent of Hyprland's
+-- CWD. The `S` field of debug.getinfo(1, "S").source is the @-prefixed
+-- absolute path of the currently-running chunk; strip the @ and the
+-- basename to get the dir hyprland.lua lives in (typically
+-- ~/.config/hypr/). require("plugins.foo") then resolves to that dir's
+-- plugins/foo/init.lua without relying on a particular working directory.
+local script_path = (debug.getinfo(1, "S").source:sub(2))
+local config_dir  = script_path:match("(.+)/[^/]+$") or "."
+package.path = config_dir .. "/?.lua;" .. config_dir .. "/?/init.lua;" .. package.path
+local smw = safe_require("plugins.split-monitor-workspaces")
+if smw then
+	-- workspace_count = 5 → 5 persistent workspaces per monitor, so
+	-- SUPER+1..5 on each monitor are always reachable (and stay bound
+	-- even when the monitor has no windows yet). To change this, edit
+	-- this number AND smw.get_amount_of_workspaces() will pick it up
+	-- automatically in dms/binds-user.lua's bind loop.
+	smw.setup({ workspace_count = 5, enable_wrapping = true, link_monitors = false })
+else
+	-- Stub: pretend the plugin has zero workspaces so the bind loop
+	-- in dms/binds-user.lua is a no-op. SUPER+1..N fall through to
+	-- Hyprland's default workspace dispatcher until the user runs
+	-- install.sh (or tweaks.sh hyprland-plugins) to clone the plugin.
+	smw = {
+		setup = function(_) end,
+		get_amount_of_workspaces = function() return 0 end,
+		workspace = function(_) return function() end end,
+		move_to_workspace_silent = function(_) return function() end end,
+		-- cycle_workspaces: when the plugin is missing, fall back to the
+		-- previous global behaviour (e+1/e-1), which DOES wrap across
+		-- monitors but at least doesn't crash the bind. Better than no-op.
+		cycle_workspaces = function(direction)
+			local delta = direction == "next" and "+1" or direction == "prev" and "-1"
+			              or direction or "next"
+			return function() hl.dsp.focus({ workspace = "e" .. delta })() end
+		end,
+	}
+end
+-- DMS-generated files (colors, outputs, layout) are written by dms on
+-- first launch. Until then they don't exist, and requiring them here
+-- would crash Hyprland before exec-once dms run has a chance. Wrap each
+-- dms-generated require in pcall so Hyprland boots cleanly even on a
+-- fresh install where dms hasn't run yet. dms/binds.lua and
+-- dms/binds-user.lua ARE shipped in the repo (binds is the upstream
+-- default, binds-user is our override), so those require normally.
 safe_require("dms.colors")
 safe_require("dms.outputs")
 safe_require("dms.layout")
 safe_require("dms.cursor")
 require("dms.binds")
 require("dms.binds-user")
+require("inputs")  -- keyboard/touchpad config + trackpad gestures
+-- ── Post-dms overrides ───────────────────────────────────────────────────────
+hl.config({
+	general = {
+		-- dms defaults this to false because dms ships its own
+		-- SUPER+RMB → window.resize bind and assumes you'll use
+		-- that. We want click-and-drag on borders / gaps too
+		-- (Hyprland's built-in mouse:resize path), so force it on.
+		resize_on_border = true,
+		-- dms also defaults border_size to 2 (a hairline). On
+		-- HiDPI screens 2 logical px is ~3-4 device px and is
+		-- very hard to click. Bump to 4 so the grab target is
+		-- reliably hit; the border is still thin enough to look
+		-- like a hairline at typical viewing distances.
+		border_size = 4,
+	},
+})
