@@ -104,18 +104,28 @@ stage_dms() {
   fi
 
   # ── Enable dms user service + lingering ─────────────────────────────────────
-  # `/usr/lib/systemd/user/dms.service` (shipped by the dms package) auto-
-  # starts the shell on graphical-session.target. The installer enables it
-  # by writing the symlink directly under ~/.config/systemd/user/ (where
-  # `systemctl --user enable` would write it). This avoids the
-  # `sudo -u … systemctl --user` dance — `sudo -H` strips XDG_RUNTIME_DIR
-  # so the call silently fails on a fresh system where the user manager
-  # isn't running yet, or when the user is logged out. Dropping a symlink
-  # works regardless of session state.
+  # We pre-stamp four things so that dms auto-starts on every login even
+  # if the user manager isn't running yet at install time, and even if
+  # no graphical session manager ever fires `graphical-session.target`
+  # (raw Hyprland+greetd never activates that target).
   #
-  # We also `loginctl enable-linger <user>` so the user's systemd manager
-  # stays alive across logouts — without this, dms only starts on the
-  # login that immediately follows the install.
+  # 1. Drop a local override at $user_unit_dir/dms.service that strips
+  #    `Requisite=graphical-session.target` and `Type=dbus`, and repoints
+  #    `WantedBy=` at `default.target`.
+  # 2. Drop symlink $user_unit_dir/default.target.wants/dms.service → the
+  #    override above. With `WantedBy=default.target` in the [Install]
+  #    block, this is what re-creates the auto-start edge on every
+  #    login.
+  # 3. Enable lingering so the user's systemd manager stays alive
+  #    across logouts (else dms only auto-starts on the next login).
+  #
+  # We do NOT call `systemctl --user enable` / `reenable`. Those calls
+  # require a running user manager (`XDG_RUNTIME_DIR=/run/user/<uid>`),
+  # which on a fresh system this stage runs in is silently absent. The
+  # warning has shipped in earlier revisions and resulted in users
+  # booting a system without dms.service enabled. We write the
+  # symlinks/files directly instead — `systemctl --user` will pick
+  # them up at the next user manager start, no questions asked.
   if id "${target_user}" >/dev/null 2>&1; then
     local user_unit_dir="${user_home}/.config/systemd/user"
     local service_src="/usr/lib/systemd/user/dms.service"
@@ -127,86 +137,80 @@ stage_dms() {
       die "dms.service unit not found at ${service_src} (dms package not installed?)"
     fi
 
-    # dms hooks graphical-session.target by default; that fires on every
-    # graphical login (greeter → Hyprland → dms). The Hyprland RPM ships
-    # hyprland-session.target as a regular FILE (not a directory), so we
-    # can't drop a `.wants/` symlink next to it — dms starts fine without
-    # the extra hook (graphical-session already pulls it in).
-    #
-    # Create the parent user unit dir first (idempotent: `install -d`
-    # silently succeeds if it already exists). On a fresh system
-    # ~/.config/systemd/ may not exist at all, and `install -d
-    # …/graphical-session.target.wants` would then create a stray
-    # `~/.config/systemd/graphical-session.target.wants/` path that
-    # systemd never reads. Doing it in two steps keeps the layout
-    # correct: ~/.config/systemd/user/ + …/user/graphical-session.target.wants/.
-    install -d -m 0755 "${user_unit_dir}"
-    chown "${target_user}:${target_user}" "${user_unit_dir}"
-    install -d -m 0755 -o "${target_user}" -g "${target_user}" \
-      "${user_unit_dir}/graphical-session.target.wants"
-    # ln -sf: -f overwrites any existing symlink/file at the target.
-    # Capture the result so a failure produces a clear error instead of
-    # the cryptic `ln: failed to create symbolic link` from set -e.
-    if ! ln -sf "${service_src}" \
-         "${user_unit_dir}/graphical-session.target.wants/dms.service"; then
-      die "failed to symlink dms.service into ${user_unit_dir}/graphical-session.target.wants/"
-    fi
-    # Override dms.service by COPYING it to ~/.config/systemd/user/.
-    # Local unit files take precedence over vendor units (no drop-in
-    # quirks — empty `Requisite=` doesn't always reset the directive
-    # across systemd versions, but a copied local unit always wins).
-    #
-    # Why we need to override:
-    #   1. Upstream has `Requisite=graphical-session.target`. Raw
-    #      Hyprland+greetd never activates that target (no GNOME/KDE
-    #      session manager running), so the Requisite= check fails and
-    #      systemd refuses to start dms.service.
-    #   2. Upstream uses `Type=dbus` with `BusName=org.freedesktop.Notifications`.
-    #      systemd waits for dms to claim the bus name before considering
-    #      it "started". If anything else (mako, dunst) ever claims it,
-    #      dms.service fails. Switch to `Type=simple` and let dms manage
-    #      its own D-Bus lifecycle.
-    #
-    # Stripped directives: Requisite= (entire line removed), Type=dbus
-    # → Type=simple. Everything else passes through unchanged.
+    # -g` honours `-o`/`-g` but plain `sed > file` and `ln -sf` run as the
+    # invoking process (root) so we need a single sweep afterwards. Run
+    # it eagerly — even though `install -d -o u -g u` set the *immediate*
+    # dir to u:u, recursively walking the tree cheap and guarantees any
+    # stale file from a previous install run also gets fixed up.
+    mkdir -p "${user_unit_dir}"
+    chown "${target_user}:${target_user}" "${user_home}/.config/systemd" 2>/dev/null || true
+    chown -R "${target_user}:${target_user}" "${user_unit_dir}" 2>/dev/null || true
+
+    # Override by COPYING the vendor unit, then sed-stripping the bits
+    # that don't work under bare Hyprland+greetd:
+    #   - Requisite=graphical-session.target  → removed (target never active)
+    #   - Type=dbus + BusName=org.freedesktop.Notifications
+    #                                        → Type=simple (lets dms own its
+    #                                          own D-Bus lifecycle; if mako or
+    #                                          dunst beat dms to the bus, this
+    #                                          would otherwise make systemd
+    #                                          refuse to start dms)
+    #   - WantedBy=graphical-session.target  → WantedBy=default.target
+    #                                          (default IS active for every
+    #                                          logged-in user)
+    # Everything else passes through unchanged.
     local override_unit="${user_unit_dir}/dms.service"
-    if [[ ! -f "${override_unit}" ]] || \
-       ! grep -q '^# omedora: dms.service override$' "${override_unit}" 2>/dev/null; then
+    if [[ ! -f "${override_unit}" ]] \
+       || ! grep -q '^# omedora: dms.service override$' "${override_unit}" 2>/dev/null; then
       sed -e '/^Requisite=/d' \
           -e 's/^Type=dbus$/Type=simple/' \
-          -e '1i # omedora: dms.service override (Requisite stripped, Type=simple)' \
+          -e 's/^WantedBy=graphical-session.target$/WantedBy=default.target/' \
+          -e '1i # omedora: dms.service override (Requisite stripped, Type=simple, WantedBy=default)' \
           -e 's|^Description=.*|Description=Dank Material Shell (DMS) [omedora override]|' \
           "${service_src}" > "${override_unit}" \
         || die "failed to write ${override_unit}"
-      chown "${target_user}:${target_user}" "${override_unit}"
     fi
     [[ -s "${override_unit}" ]] \
       || die "${override_unit} is missing or empty after write"
-    # The upstream unit still has `WantedBy=graphical-session.target`,
-    # but that target is never active. Replace the [Install] block with
-    # one that wants `default.target` — which IS active for any logged-in
-    # user. dms will then auto-start on every login.
-    if grep -q '^WantedBy=graphical-session.target$' "${override_unit}"; then
-      sed -i 's|^WantedBy=graphical-session.target$|WantedBy=default.target|' \
-        "${override_unit}"
+    chmod 0644 "${override_unit}"
+
+    # Drop the enable symlink ourselves: $user_unit_dir/default.target.wants/
+    # This is what makes dms auto-start on every user login.
+    install -d "${user_unit_dir}/default.target.wants"
+    if ! ln -sf "${override_unit}" \
+       "${user_unit_dir}/default.target.wants/dms.service"; then
+      die "failed to symlink dms.service into ${user_unit_dir}/default.target.wants/"
     fi
-    # Drop the symlink so the override unit becomes the active one (no
-    # longer alias to the vendor copy). Symlink vs local-unit precedence:
-    # local unit in ~/.config/systemd/user/ always wins over the symlink
-    # target in /usr/lib/systemd/user/, so this is safe.
+
+    # Pull any old, now-stale graphical-session wants-link. Vendors started
+    # shipping symlinks here on fully-installed Fedora desktops; on a fresh
+    # omedora install the symlink only exists because some other enabler
+    # (or this stage's earlier revisions) put it there. It's harmless but
+    # worth dropping so the override unit is unambiguous.
     rm -f "${user_unit_dir}/graphical-session.target.wants/dms.service" 2>/dev/null || true
-    # `systemctl --user enable` writes the symlink for us; we already
-    # have a local unit, so `enable` is a no-op for the unit itself but
-    # still creates the default.target.wants/ symlink.
-    sudo -u "${target_user}" systemctl --user reenable "${override_unit##*/}" 2>/dev/null \
-      || warn "systemctl --user reenable dms.service failed (user can enable manually)"
-    info "dropped dms.service override (local unit, Type=simple, no Requisite)"
-    if loginctl enable-linger "${target_user}" 2>/dev/null; then
-      info "enabled lingering for ${target_user}"
+
+    # Final permission sweep. `install -d` and `ln -sf` (run by root)
+    # produce root:root artifacts; systemd's user manager declines to
+    # follow them on reload if owned by anything other than the user.
+    # We sweep recursively so any stale file from a previous install
+    # (or from the wrong-owner intermediate state) is also fixed.
+    chown -R "${target_user}:${target_user}" "${user_unit_dir}" \
+      || die "chown -R ${user_unit_dir} failed"
+
+    info "dms.service override + default.target.wants symlink in place (perms fixed)"
+
+    if ! loginctl enable-linger "${target_user}" 2>/dev/null; then
+      # Already-enabled returns nonzero on some systemd versions; check.
+      if [[ "$(loginctl show-user "${target_user}" 2>/dev/null \
+           | awk -F= '/^Linger=/{print $2}')" != "yes" ]]; then
+        warn "loginctl enable-linger ${target_user} failed (user can run it manually)"
+      else
+        info "lingering already enabled for ${target_user}"
+      fi
     else
-      warn "loginctl enable-linger ${target_user} failed (user can run it manually)"
+      info "enabled lingering for ${target_user}"
     fi
   else
-    info "loginctl enable-linger already enabled for ${target_user}"
+    warn "target_user ${target_user} not found; skipping dms.service install"
   fi
 }
