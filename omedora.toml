@@ -203,15 +203,21 @@ optional_copr = [
 # qt6ct, qt6-qtmultimedia) are installed by default. Pass
 # --setopt=install_weak_deps=False to skip them.
 install_weak_deps = true
-
-[flatpak]
-# Per-user browsers (Zen) live under `user` so they install into
-# ~/.local/share/flatpak, are owned by the desktop user, and don't
-# bleed into other accounts. Use `system` only for things every user
-# on the box genuinely needs (codecs, fonts, system helpers).
-system = []
-user = [
-  "app.zen_browser.zen",            # Zen Browser (not in any dnf repo)
+[zen_browser]
+# Extensions installed into the Zen Browser Flatpak after it is deployed.
+# Each entry is an XPI URL. Extensions are installed per-user inside the
+# sandbox via Zen's native extension management API (no policy, no restart
+# required, no external tooling). XPIs are fetched and injected inside the
+# sandbox — the host never sees the raw XPI.
+#
+# Example entries:
+#   "https://addons.mozilla.org/firefox/downloads/latest/noscript/latest.xpi"
+#   "https://addons.mozilla.org/firefox/downloads/latest/bitwarden-password-manager/latest.xpi"
+#   "https://addons.mozilla.org/firefox/downloads/latest/ublock-origin/latest.xpi"
+extensions = [
+  "https://addons.mozilla.org/firefox/downloads/latest/noscript/latest.xpi",
+  "https://addons.mozilla.org/firefox/downloads/latest/bitwarden-password-manager/latest.xpi",
+  "https://addons.mozilla.org/firefox/downloads/latest/ublock-origin/latest.xpi",
 ]
 # ── DMS plugins ───────────────────────────────────────────────────────────────
 # Two sources, both installed by the dms stage:

@@ -59,17 +59,94 @@ stage_flatpak() {
       || warn "system Flatpak install had failures (continuing)"
   fi
 
-  if [[ ${#OMEDORA_FLATPAK_USER[@]} -gt 0 ]]; then
-    if ! id "${OMEDORA_TARGET_USER}" >/dev/null 2>&1; then
-      die "user-scope flatpaks configured but target_user '${OMEDORA_TARGET_USER}' does not exist"
+  # ── Zen Browser extensions ──────────────────────────────────────────────────
+  #
+  # Zen Browser is a Flatpak, so extensions must be installed INSIDE the
+  # sandbox. Strategy: use `flatpak run --command=python3` with a compact
+  # Python -c one-liner that runs ENTIRELY inside the sandbox — it downloads
+  # each XPI from AMO, extracts it to the profile's extensions/ dir, and reads
+  # the extension ID from manifest.json. No file paths cross the sandbox
+  # boundary at all.
+  #
+  # Extensions activate on next browser launch.
+  if [[ ${#OMEDORA_ZEN_EXTENSIONS[@]} -gt 0 ]]; then
+
+    # Confirm Zen Browser Flatpak is actually installed before attempting.
+    if sudo -u "${OMEDORA_TARGET_USER}" env HOME="${user_home}" \
+      flatpak list --user --app 2>/dev/null | grep -q 'app\.zen_browser\.zen'; then
+      info "installing ${#OMEDORA_ZEN_EXTENSIONS[@]} extension(s) into Zen Browser"
+
+      # Build a single-quoted Python -c argument that runs inside the sandbox.
+      # shellcheck disable=SC2016  # single quotes prevent expansion — intentional
+      sudo -u "${OMEDORA_TARGET_USER}" env HOME="${user_home}" \
+        flatpak run --command=python3 \
+        app.zen_browser.zen \
+        -c '
+import sys, os, json, zipfile, re, urllib.request, tempfile
+xpi_urls = sys.argv[1:]
+if not xpi_urls:
+    print("No extension URLs provided", file=sys.stderr)
+    sys.exit(0)
+profile_base = os.path.expanduser("~/.var/app/app.zen_browser.zen/.zen")
+ini_path = os.path.join(profile_base, "profiles.ini")
+profile_dir = None
+in_default = False
+with open(ini_path) as fh:
+    for line in fh:
+        line = line.strip()
+        if line.startswith("["):
+            in_default = False
+            m = re.match(r"^\[Profile\d+\]$", line)
+            if m:
+                section = m.group(0).strip("[]")
+        elif line.startswith("Default=") and line.split("=", 1)[1].strip() == "1":
+            in_default = True
+        elif line.startswith("Path=") and in_default:
+            profile_dir = line.split("=", 1)[1].strip()
+            break
+if not profile_dir:
+    sys.exit("ERROR: could not determine profile path from profiles.ini")
+profile_path = os.path.join(profile_base, profile_dir)
+ext_dir = os.path.join(profile_path, "extensions")
+os.makedirs(ext_dir, exist_ok=True)
+for url in xpi_urls:
+    with tempfile.NamedTemporaryFile(suffix=".xpi", delete=False) as tmp:
+        tmp_path = tmp.name
+    try:
+        print(f"INFO: downloading {url}")
+        urllib.request.urlretrieve(url, tmp_path)
+        xpi_id = None
+        try:
+            with zipfile.ZipFile(tmp_path, "r") as z:
+                if "manifest.json" in z.namelist():
+                    with z.open("manifest.json") as mf:
+                        manifest = json.loads(mf.read().decode("utf-8"))
+                        xpi_id = manifest.get("applications", {}).get("gecko", {}).get("id")
+                        if not xpi_id:
+                            xpi_id = manifest.get("browser_specific_settings", {}).get("gecko", {}).get("id")
+        except Exception as e:
+            print(f"WARNING: could not read manifest from {url}: {e}", file=sys.stderr)
+        if not xpi_id:
+            xpi_id = os.path.splitext(os.path.basename(url))[0]
+            print(f"INFO: using filename as extension ID: {xpi_id}")
+        ext_target = os.path.join(ext_dir, xpi_id)
+        os.makedirs(ext_target, exist_ok=True)
+        with zipfile.ZipFile(tmp_path, "r") as z:
+            z.extractall(ext_target)
+        print(f"INFO: installed {xpi_id} to {ext_target}")
+    finally:
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+print("INFO: all extensions installed successfully")
+' \
+        "${OMEDORA_ZEN_EXTENSIONS[@]}" \
+        || warn "Zen Browser extension install had failures (continuing)"
+    else
+      [[ ${#OMEDORA_ZEN_EXTENSIONS[@]} -gt 0 ]] \
+        && warn "Zen Browser Flatpak not installed; skipping extensions"
     fi
-    info "installing ${#OMEDORA_FLATPAK_USER[@]} user Flatpak(s) as ${OMEDORA_TARGET_USER}"
-    # `sudo -u foo` without -H keeps $HOME=root's, which would land the
-    # install in /root/.local/share/flatpak. Set HOME explicitly so
-    sudo -u "${OMEDORA_TARGET_USER}" env HOME="${user_home}" \
-      flatpak install -y --user flathub --or-update "${OMEDORA_FLATPAK_USER[@]}" \
-      || warn "user Flatpak install had failures (continuing)"
   fi
+
 
   # ── Refresh desktop-entry caches so dms / xdg-desktop-portal see Flatpaks ──
   #

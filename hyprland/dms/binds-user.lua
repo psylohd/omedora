@@ -72,6 +72,8 @@ local conflicts = {
 	"SUPER + Q", "SUPER + W", "SUPER + T", "SUPER + F", "SUPER + V",
 	-- Layout toggle + reload + exit
 	"SUPER + L", "SUPER + SHIFT + L", "SUPER + R", "SUPER + Escape",
+	-- Minimize / restore (added in § 9)
+	"SUPER + MINUS", "SUPER + equal",
 	-- Mouse-button binds: SUPER + LMB drag is rebound in § 8.
 	-- dms upstream does NOT bind this by default, but listing it
 	-- here future-proofs against a future dms release that adds it.
@@ -173,6 +175,8 @@ hl.bind("SUPER + mouse:272",
 	hl.dsp.window.drag(),
 	{ description = "Drag window within layout (SUPER + LMB)" }
 )
+hl.bind("SUPER + mouse_down", hl.dsp.focus({ workspace = "e+1" }), { description = "Cycle to next workspace" })
+hl.bind("SUPER + mouse_up",   hl.dsp.focus({ workspace = "e-1" }), { description = "Cycle to previous workspace" })
 -- ── 7. Misc / utility ───────────────────────────────────────────────────────
 hl.bind("SUPER + R",
 	hl.dsp.exec_cmd("hyprctl reload"),
@@ -182,4 +186,51 @@ hl.unbind("SUPER + Escape")
 hl.bind("SUPER + Escape",
 	hl.dsp.exec_cmd("hyprctl dispatch exit"),
 	{ description = "Exit Hyprland" }
+)
+-- ── 9. Minimize / restore (SUPER + MINUS / SUPER + equal) ────────────────────
+-- "Minimize" parks the active window in the special workspace named
+-- `minimized` (Hyprland auto-creates the special on first move). Restore
+-- toggles that workspace open (focusing the most recently parked window)
+-- and moves it back to whatever workspace was active at restore time.
+-- Limitation: all minimized windows share one special workspace, so
+-- pressing SUPER+= brings back the most-recently parked window, not any
+-- specific one. Single-window-minimize semantics, like the snippet
+-- this is based on.
+--
+-- Hyprland quirk: hl.get_workspaces() reports specials as `.name ==
+-- "special:minimized"` while hl.dsp.workspace.toggle_special() takes
+-- the bare suffix. The match below handles both forms.
+--
+-- Keysym names follow the XKB_KEY_<name> convention (lowercase, no
+-- `S` suffix). `MINUS` (hyphen) and `equal` (=) are the bare keycap
+-- labels, without Shift. Hyprland rejects uppercased variants like
+-- `EQUALS` with "Unknown keysym" at hl.bind time.
+hl.bind("SUPER + MINUS",
+	hl.dsp.window.move({ workspace = "special:minimized", follow = false }),
+	{ description = "Minimize current window to scratchpad" }
+)
+hl.bind("SUPER + equal",
+	function()
+		for _, ws in ipairs(hl.get_workspaces()) do
+			local nm = ws.name or ""
+			if nm == "special:minimized" or nm == "minimized" then
+				-- If there's a window parked there, restore it. Otherwise
+				-- the special exists but is empty: nothing to bring back,
+				-- leave the bind as a no-op rather than closing an empty
+				-- special (which would do nothing visible anyway, but a
+				-- stray log line is worse than a quiet keypress).
+				if #(hl.get_workspace_windows(ws)) >0 then
+					hl.dispatch(hl.dsp.workspace.toggle_special("minimized"))
+					-- The toggled-open special focuses its first window.
+					-- Move it back to the workspace that was active right
+					-- before restore (the snippet uses "+0" which Hyprland
+					-- expands to "current workspace" — i.e. the workspace
+					-- the user was on when they hit SUPER+=).
+					hl.dispatch(hl.dsp.window.move({ workspace = "+0", follow = true }))
+				end
+				return
+			end
+		end
+	end,
+	{ description = "Restore most recently minimized window" }
 )

@@ -102,9 +102,10 @@ emit("OMEDORA_TUIGREET_BRANCH",    vtg_cfg.get("vendored_tuigreet_branch", ""))
 emit("OMEDORA_TUIGREET_COMMIT",    vtg_cfg.get("vendored_tuigreet_commit", ""))
 
 # flatpak
-fp = cfg.get("flatpak", {})
-emit("OMEDORA_FLATPAK_SYSTEM", fp.get("system", []))
-emit("OMEDORA_FLATPAK_USER", fp.get("user", []))
+# zen_browser extensions — XPI URLs installed inside the Zen Flatpak sandbox
+zb = cfg.get("zen_browser", {})
+emit("OMEDORA_ZEN_EXTENSIONS", zb.get("extensions", []))
+
 
 # greeter
 g = cfg.get("greeter", {})

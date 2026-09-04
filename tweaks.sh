@@ -84,6 +84,7 @@ source "${SCRIPT_DIR}/lib/stage-configs.sh"
 source "${SCRIPT_DIR}/lib/stage-userdirs.sh"
 source "${SCRIPT_DIR}/lib/stage-services.sh"
 source "${SCRIPT_DIR}/lib/stage-keyring.sh"
+source "${SCRIPT_DIR}/lib/stage-flatpak.sh"
 source "${SCRIPT_DIR}/lib/stage-hyprland-plugins.sh"
 source "${SCRIPT_DIR}/lib/detect-monitors.sh"
 
