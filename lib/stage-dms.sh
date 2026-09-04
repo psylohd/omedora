@@ -153,26 +153,68 @@ stage_dms() {
   # so we can rm it (stage runs as root) and so the user can later edit.
   chown -R "${target_user}:${target_user}" "${user_unit_dir}" 2>/dev/null || true
 
-  # First, drop any stale enable symlinks for dms.service that pointed
-  # at an absent override unit file from a prior install run. Newer
-  # installs (this one) ship dms.service directly via the vendor unit
-  # + a default.target.wants/ enable symlink. Default dms.service lives
-  # at /usr/lib/systemd/user/dms.service; we point at it directly.
+  # ── Write local dms.service override + link it into default.target.wants ──
+  # Upstream dms.service ships with three directives that don't work on
+  # bare Hyprland+greetd:
+  #
+  #   1. `Requisite=graphical-session.target` — never activated by
+  #      greetd/Hyprland; the Requisite is unmet, systemd refuses to
+  #      start dms with `result 'dependency'`. We saw this exact failure
+  #      (Sep 4 fresh install on test@fedora: `Job dms.service/start
+  #      failed with result 'dependency'` even though Hyprland was
+  #      running and our `hyprland-session.target` was deployed).
+  #
+  #   2. `Type=dbus` + `BusName=org.freedesktop.Notifications` — if
+  #      anything else (mako, dunst) claims that bus name first,
+  #      systemd waits on dms to claim it and eventually times out.
+  #      Letting dms own its own D-Bus lifecycle via `Type=simple` is
+  #      strictly more robust.
+  #
+  #   3. `WantedBy=graphical-session.target` — same issue as (1). Repoint
+  #      at `default.target`, which is active for every logged-in user
+  #      regardless of session type.
+  #
+  # Local units in ~/.config/systemd/user/ always win over vendor units
+  # in /usr/lib/systemd/user/ (see `man systemd.unit`, "User Unit Search
+  # Path"). We sed-strip the three problematic directives above, drop
+  # the result at ${user_unit_dir}/dms.service, then symlink THAT into
+  # default.target.wants/ — so the auto-start edge picks up our fixed
+  # copy, not the upstream one.
   local service_src="/usr/lib/systemd/user/dms.service"
   if [[ ! -f "${service_src}" ]]; then
     warn "dms.service unit not found at ${service_src}; not enabling (dms RPM missing?)"
-  else
-    install -d -o "${target_user}" -g "${target_user}" -m 0755 \
-      "${user_unit_dir}/default.target.wants"
-    if ! ln -sf "${service_src}" \
-       "${user_unit_dir}/default.target.wants/dms.service"; then
-      warn "failed to symlink dms.service into default.target.wants/"
-    else
-      chown -h "${target_user}:${target_user}" \
-        "${user_unit_dir}/default.target.wants/dms.service"
-      info "dms.service auto-start symlink installed"
-    fi
+    return 0
   fi
+
+  local override_unit="${user_unit_dir}/dms.service"
+  if [[ ! -f "${override_unit}" ]] \
+     || ! grep -q '^# omedora: dms.service override$' "${override_unit}" 2>/dev/null; then
+    sed -e '/^Requisite=/d' \
+        -e 's/^Type=dbus$/Type=simple/' \
+        -e 's/^WantedBy=graphical-session.target$/WantedBy=default.target/' \
+        -e '1i # omedora: dms.service override (Requisite stripped, Type=simple, WantedBy=default)' \
+        -e 's|^Description=.*|Description=Dank Material Shell (DMS) [omedora override]|' \
+        "${service_src}" > "${override_unit}" \
+      || die "failed to write ${override_unit}"
+  fi
+  [[ -s "${override_unit}" ]] \
+    || die "${override_unit} is missing or empty after write"
+  chmod 0644 "${override_unit}"
+
+  # Drop stale graphical-session.target.wants/ symlinks from older
+  # install runs that pointed at the upstream copy. Harmless but worth
+  # keeping the user unit dir unambiguous.
+  rm -f "${user_unit_dir}/graphical-session.target.wants/dms.service" 2>/dev/null || true
+
+  install -d -o "${target_user}" -g "${target_user}" -m 0755 \
+    "${user_unit_dir}/default.target.wants"
+  if ! ln -sf "${override_unit}" \
+     "${user_unit_dir}/default.target.wants/dms.service"; then
+    die "failed to symlink dms.service into ${user_unit_dir}/default.target.wants/"
+  fi
+  chown -h "${target_user}:${target_user}" \
+    "${user_unit_dir}/default.target.wants/dms.service"
+  info "dms.service auto-start symlink installed"
 
   # Tell the running user manager to forget any leftover unit state.
   # Silent if no manager is up (fresh install, no XDG_RUNTIME_DIR yet);
