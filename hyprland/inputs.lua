@@ -12,6 +12,12 @@ hl.config({
         numlock_by_default = true,
         repeat_delay = 250,
         repeat_rate = 35,
+        -- Pointer speed: sensitivity is clamped to [-1.0, 1.0]; positive is
+        -- faster. `1.0` plus `accel_profile = "flat"` (below) gives a clean
+        -- linear cursor with the maximum legal multiplier — the default
+        -- (0.0) felt sluggish on a HiDPI screen. Lower this on a smaller
+        -- monitor or with a high-DPI mouse.
+        sensitivity = 1.0,
         accel_profile = "flat",
         touchpad = {
             natural_scroll = true,

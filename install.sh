@@ -31,10 +31,10 @@ export OMEDORA_REPO_ROOT="${SCRIPT_DIR}"
 
 # ── CLI parsing ───────────────────────────────────────────────────────────────
 DRY_RUN=false
+NO_REBOOT=false
 
 ONLY=""
 SKIP=""
-CONFIG_PATH=""
 usage() {
   cat <<USAGE
 Usage: sudo ./install.sh [options]
@@ -44,12 +44,14 @@ Options:
   --dry-run          print what would happen, do nothing
   --only stages      comma-separated list of stages to run (e.g. dnf,vendor)
   --skip stages      comma-separated list of stages to skip
+  --no-reboot        skip the automatic reboot at the end (e.g. for headless
+                     automation that wants to do its own reboot)
   -h, --help         this help
 
 
 Stages (toggleable in omedora.toml [stages]):
   copr, dnf, vendor, flatpak, plymouth, tuigreet, hyprland,
-  quickshell, greetd, dms, services
+  quickshell, greetd, dms, keyring, userdirs, services
 (configs = plymouth + tuigreet + hyprland + quickshell in one pass;
  plymouth/tuigreet/hyprland/quickshell are also accepted as aliases for configs)
 
@@ -63,6 +65,7 @@ while [[ $# -gt 0 ]]; do
     --dry-run)  DRY_RUN=true; shift ;;
     --only)     ONLY="$2"; shift 2 ;;
     --skip)     SKIP="$2"; shift 2 ;;
+    --no-reboot) NO_REBOOT=true; shift ;;
     -h|--help)  usage; exit 0 ;;
     *)          echo "unknown arg: $1" >&2; usage; exit 2 ;;
   esac
@@ -206,3 +209,26 @@ All installed files live under:
 
 Backups of overwritten files have timestamped .bak.<date> suffixes.
 DONE
+
+# ── Auto-reboot ──────────────────────────────────────────────────────────────
+# Greetd is system-level and won't see its new /etc/greetd/config.toml + the
+# freshly-installed Hyprland binary unless the kernel brings everything up
+# from scratch. The user shouldn't have to type `sudo systemctl reboot` —
+# we do it for them, with a 5-second grace period for anyone reading the
+# install log tail on a serial console.
+#
+# Skipped automatically when --dry-run is set, when the user has the
+# OMEDORA_NO_REBOOT=1 env var (used by CI / tweaks.sh), or when not on a
+# TTY (so headless ssh invocations don't accidentally reboot the box).
+if ${DRY_RUN} || ${NO_REBOOT}; then
+  info "--dry-run / --no-reboot — skipping automatic reboot. Run \`sudo systemctl reboot\` to finish."
+elif [[ ! -t 1 ]]; then
+  # not a TTY (e.g. piped to a file or run from systemd): don't surprise
+  # whoever's downstream by yanking the machine out from under them.
+  warn "non-TTY invocation — automatic reboot suppressed. Run \`sudo systemctl reboot\` when ready."
+else
+  echo
+  echo -e "${RED}Rebooting in 5 seconds. Ctrl-C to cancel.${RST}"
+  sleep 5
+  systemctl reboot || warn "systemctl reboot failed (returned $?). Run it manually."
+fi
