@@ -79,6 +79,11 @@ for _stage in copr dnf vendor flatpak configs greetd dms keyring userdirs servic
   source "${SCRIPT_DIR}/lib/stage-${_stage}.sh"
 done
 
+# Monitor detection (used by stage-greetd.sh to default-enable the
+# largest connected output). Doesn't read /sys itself unless called —
+# pure functions + raw sysfs reads at the moment of invocation.
+source "${SCRIPT_DIR}/lib/detect-monitors.sh"
+
 load_config
 
 # Apply --only / --skip overrides to the stage flags.

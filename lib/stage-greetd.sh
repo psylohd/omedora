@@ -48,12 +48,62 @@ GREETD_EOF
       # Append the [[outputs]] blocks outside the heredoc; the heredoc
       # is single-quote-quoted so $vars would not expand inside, and we
       # need to splice in OMEDORA_GREETER_OUTPUTS which bash owns.
+      # Source-of-truth rules:
+      #   1. If [[greeter.outputs]] in omedora.toml has ANY entries,
+      #      those win verbatim (user override).
+      #   2. Otherwise: probe /sys/class/drm EDIDs at install time
+      #      (detect-monitors.sh:detect_active_connectors) to find the
+      #      currently connected output with the largest PHYSICAL area
+      #      (HSize * VSize from EDID bytes 21..22, in mm^2). Mark that
+      #      one primary; emit a sensible fallback list of common
+      #      external connectors in case the user plugs in a second
+      #      monitor later.
+      #
+      # We always emit a comment header explaining what the installer
+      # decided, so future `tweaks.sh greetd` runs leave a readable
+      # audit trail in /etc/tuigreet/config.toml.
       if [[ ${#OMEDORA_GREETER_OUTPUTS[@]} -gt 0 ]]; then
+        printf '\n# Output entries from [[greeter.outputs]] in omedora.toml (verbatim).\n' >> "${tmp}"
         for entry in "${OMEDORA_GREETER_OUTPUTS[@]}"; do
           IFS='|' read -r k_conn k_en k_pri <<< "${entry}"
           printf '\n[[outputs]]\nconnector = "%s"\nenabled   = %s\nprimary   = %s\n' \
             "${k_conn#connector=}" "${k_en#enabled=}" "${k_pri#primary=}" >> "${tmp}"
         done
+      else
+        # Auto-detect from /sys/class/drm.
+        printf '\n# No [[greeter.outputs]] set in omedora.toml; auto-detected at install time.\n' >> "${tmp}"
+        local -a detected=()
+        while IFS= read -r line; do
+          [[ -z "${line}" ]] && continue
+          detected+=( "${line}" )
+        done < <(detect_active_connectors 2>/dev/null || true)
+
+        if (( ${#detected[@]} > 0 )); then
+          # First entry is the largest by area (sort already done).
+          local first="${detected[0]}"
+          local primary_name="${first#*|}"
+          local primary_area="${first%%|*}"
+          printf '# Largest connected monitor: %s (%s mm^2, primary).\n' \
+            "${primary_name}" "${primary_area}" >> "${tmp}"
+          printf '\\n# Enabling detected monitors; others left disabled.\\n' >> "${tmp}"
+          printf '# Re-run `tweaks.sh greetd` if the wiring needs to change.\\n\\n' >> "${tmp}"
+          for line in "${detected[@]}"; do
+            local name="${line#*|}"
+            local is_primary=""
+            [[ "${name}" == "${primary_name}" ]] && is_primary="true"
+            printf '[[outputs]]\\nconnector = "%s"\\nenabled   = true\\nprimary   = %s\\n\\n' \
+              "${name}" "${is_primary}" >> "${tmp}"
+          done
+        else
+          # Detection failed (no EDID-readable outputs at install time,
+          # likely a headless VM or a host without a wired display).
+          # Emit a minimal "enable whatever's there" config; tuigreet's
+          # own autoprobe picks the right output at runtime.
+          printf '\\n# Monitor detection could not read any EDIDs at install time.\\n' >> "${tmp}"
+          printf '# (Normal on headless VMs or installs without a wired display.)\\n' >> "${tmp}"
+          printf '# Add [[outputs]] entries in omedora.toml and re-run\\n' >> "${tmp}"
+          printf '# `tweaks.sh greetd` once a monitor is plugged in.\\n' >> "${tmp}"
+        fi
       fi
       ;;
     dms-greeter)

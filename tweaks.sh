@@ -81,6 +81,7 @@ source "${SCRIPT_DIR}/lib/stage-userdirs.sh"
 source "${SCRIPT_DIR}/lib/stage-services.sh"
 source "${SCRIPT_DIR}/lib/stage-flatpak.sh"
 source "${SCRIPT_DIR}/lib/stage-keyring.sh"
+source "${SCRIPT_DIR}/lib/detect-monitors.sh"
 
 tweak_plymouth()   { section "tweak: plymouth";   stage_config_plymouth; }
 tweak_tuigreet()   { section "tweak: tuigreet";   stage_config_tuigreet; }
