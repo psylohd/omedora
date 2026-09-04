@@ -35,7 +35,26 @@ vt = 1
 [default_session]
 command = "sh -c '. /etc/tuigreet/palette.sh; exec tuigreet --cmd \"uwsm start /usr/bin/start-hyprland\"'"
 user = "greetd"
+
+# Per-monitor selection from [[greeter.outputs]] in omedora.toml.
+# Each entry is one [[outputs]] block at the root of this file
+# (tuigreet reads these at the root, not inside any [section]).
+# enabled = false means tuigreet skips that connector entirely — no
+# surface, no password prompt, no clock on that monitor.
+# Set primary = true on EXACTLY one entry; that one's native resolution
+# drives the terminal cell-grid sizing. Multiple primaries error out at
+# tuigreet's config-validation step.
 GREETD_EOF
+      # Append the [[outputs]] blocks outside the heredoc; the heredoc
+      # is single-quote-quoted so $vars would not expand inside, and we
+      # need to splice in OMEDORA_GREETER_OUTPUTS which bash owns.
+      if [[ ${#OMEDORA_GREETER_OUTPUTS[@]} -gt 0 ]]; then
+        for entry in "${OMEDORA_GREETER_OUTPUTS[@]}"; do
+          IFS='|' read -r k_conn k_en k_pri <<< "${entry}"
+          printf '\n[[outputs]]\nconnector = "%s"\nenabled   = %s\nprimary   = %s\n' \
+            "${k_conn#connector=}" "${k_en#enabled=}" "${k_pri#primary=}" >> "${tmp}"
+        done
+      fi
       ;;
     dms-greeter)
       cat > "${tmp}" <<'GREETD_EOF'

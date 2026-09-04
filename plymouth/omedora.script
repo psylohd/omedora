@@ -1,15 +1,47 @@
-# Nokron Plymouth Theme - FEDORA ASCII wordmark on Tokyo Night background.
-# Replicates the Omarchy script-module style with Fedora branding.
+# omedora Plymouth theme - FEDORA wordmark on a Tokyo Night background.
+#
+# Layout strategy: we draw all interactive elements (logo, lock + entry
+# + bullets, progress bar) anchored to a single computed center point.
+# On a 1920-wide single-screen or a Plymouth framebuffer spanning two
+# side-by-side monitors (3840 wide), the script draws them at the
+# framebuffer midpoint by default.
+#
+# For multi-monitor setups the script divides every coordinate by
+# `scaling_factor`, derived from total framebuffer width:
+#
+#   if fb_w <= 1920: scaling_factor = 1
+#   if fb_w >= 3000: scaling_factor = 2           (4K-class, assume 2x DPI)
+#   if fb_w >= 5000: scaling_factor = fb_w / 1920 (5K-class)
+#
+# Override via [Daemon] DeviceScale=N in /etc/plymouth/plymouthd.conf
+# or via the kernel command line `plymouth.force-scale=N` at boot.
 
-# Background: #1a1b26 (Tokyo Night)
+global.fb_w = Window.GetWidth();
+global.fb_h = Window.GetHeight();
+
+# Background - fills the entire framebuffer, ignores scaling.
 Window.SetBackgroundTopColor(0.102, 0.106, 0.149);    # 0x1A1B26
 Window.SetBackgroundBottomColor(0.102, 0.106, 0.149); # 0x1A1B26
 
-# Center the FEDORA wordmark
+# --- Scaling ---
+global.scaling_factor = 1;
+if (global.fb_w >= 3000) {
+  global.scaling_factor = 2;
+}
+if (global.fb_w >= 5000) {
+  candidate = Math.Int(global.fb_w / 1920);
+  if (candidate > global.scaling_factor) {
+    global.scaling_factor = candidate;
+  }
+}
+global.center_x = Math.Int(global.fb_w / 2 / global.scaling_factor);
+global.center_y = Math.Int(global.fb_h / 2 / global.scaling_factor);
+
+# Up-front asset loads.
 logo.image = Image("logo.png");
 logo.sprite = Sprite(logo.image);
-logo.sprite.SetX(Window.GetWidth() / 2 - logo.image.GetWidth() / 2);
-logo.sprite.SetY(Window.GetHeight() / 2 - logo.image.GetHeight() / 2);
+logo.sprite.SetX(global.center_x - logo.image.GetWidth() / 2);
+logo.sprite.SetY(global.center_y - logo.image.GetHeight() / 2 - 60);
 logo.sprite.SetOpacity(1);
 
 # Animation state for fake-progress easing
@@ -91,7 +123,7 @@ entry.image = Image("entry.png");
 bullet.image = Image("bullet.png");
 
 entry.sprite = Sprite(entry.image);
-entry.x = Window.GetWidth() / 2 - entry.image.GetWidth() / 2;
+entry.x = global.center_x - entry.image.GetWidth() / 2;
 entry.y = logo.sprite.GetY() + logo.image.GetHeight() + 40;
 entry.sprite.SetPosition(entry.x, entry.y, 10001);
 entry.sprite.SetOpacity(0);
@@ -150,7 +182,7 @@ Plymouth.SetDisplayPasswordFunction(display_password_callback);
 
 progress_box.image = Image("progress_box.png");
 progress_box.sprite = Sprite(progress_box.image);
-progress_box.x = Window.GetWidth() / 2 - progress_box.image.GetWidth() / 2;
+progress_box.x = global.center_x - progress_box.image.GetWidth() / 2;
 progress_box.y = entry.y + entry.image.GetHeight() / 2 - progress_box.image.GetHeight() / 2;
 progress_box.sprite.SetPosition(progress_box.x, progress_box.y, 0);
 progress_box.sprite.SetOpacity(0);
@@ -158,7 +190,7 @@ progress_box.sprite.SetOpacity(0);
 progress_bar.original_image = Image("progress_bar.png");
 progress_bar.sprite = Sprite();
 progress_bar.image = progress_bar.original_image.Scale(1, progress_bar.original_image.GetHeight());
-progress_bar.x = Window.GetWidth() / 2 - progress_bar.original_image.GetWidth() / 2;
+progress_bar.x = global.center_x - progress_bar.original_image.GetWidth() / 2;
 progress_bar.y = progress_box.y + (progress_box.image.GetHeight() - progress_bar.original_image.GetHeight()) / 2;
 progress_bar.sprite.SetPosition(progress_bar.x, progress_bar.y, 1);
 progress_bar.sprite.SetOpacity(0);

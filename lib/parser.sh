@@ -127,10 +127,26 @@ emit("OMEDORA_USERDIR_DEV",      userdirs_cfg.get("xdg_dev_dir", "dev"))
 emit("OMEDORA_USERDIR_PROJECTS", userdirs_cfg.get("xdg_projects_dir", "projects"))
 emit("OMEDORA_USERDIR_PROGRAMS", userdirs_cfg.get("xdg_programs_dir", "programs"))
 
+# plymouth device_scale override (0 = script auto-derives from fb_w)
+emit("OMEDORA_PLYMOUTH_DEVICE_SCALE", cfg.get("plymouth", {}).get("device_scale", 0))
+
 # services
 svc = cfg.get("services", {})
 emit("OMEDORA_SERVICES_ENABLE", svc.get("enable", []))
 emit("OMEDORA_SERVICES_DEFAULT", svc.get("set_default", "graphical.target"))
+
+# greeter.outputs — per-monitor config list used by stage-greetd.sh
+# to emit `[[outputs]]` blocks in tuigreet's /etc/tuigreet/config.toml.
+# Each entry is a pipe-delimited string so bash can array-append it.
+gr = cfg.get("greeter", {})
+if gr.get("backend", "") == "tuigreet":
+    outputs = gr.get("outputs", [])
+    print("OMEDORA_GREETER_OUTPUTS=( )")
+    for o in outputs:
+        connector = o.get("connector", "").replace("|", " ")
+        enabled   = "true" if o.get("enabled", True)  else "false"
+        primary   = "true" if o.get("primary", False) else "false"
+        print(f"OMEDORA_GREETER_OUTPUTS+=( 'connector={connector}|enabled={enabled}|primary={primary}' )")
 
 stg = cfg.get("stages", {})
 for k, v in stg.items():

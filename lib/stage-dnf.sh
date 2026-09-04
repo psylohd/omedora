@@ -78,4 +78,22 @@ stage_dnf() {
   if ! rpm -q plymouth-plugin-script >/dev/null 2>&1; then
     die "plymouth-plugin-script is not installed. dnf5 install plymouth-plugin-script first."
   fi
+
+  # Post-install verification: ghostty is the SUPER+RETURN terminal
+  # launch target. It comes in as a weak-dep of dms or another
+  # danklinux package; on a fresh install with weak-deps enabled,
+  # dnf can silently skip it if its transaction conflicts (especially
+  # when scottames/ghostty is also enabled — see [coprs] in
+  # omedora.toml). If ghostty didn't land, retry from the danklinux
+  # COPR explicitly. Failing the whole stage just because of a weak-
+  # dep is overzealous; a loud warning is the right level.
+  if ! rpm -q ghostty >/dev/null 2>&1; then
+    warn "ghostty not installed after dnf stage; retrying from avengemedia/danklinux"
+    if dnf5 -y install --setopt='avengemedia/danklinux.gpgcheck=0' \
+                         --setopt='copr*.gpgcheck=0' ghostty; then
+      info "ghostty recovered via fallback install"
+    else
+      warn "ghostty install failed again — re-run \`dnf5 install ghostty\` later"
+    fi
+  fi
 }

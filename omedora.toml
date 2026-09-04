@@ -34,7 +34,22 @@ enable = [
   # that COPR ever stops shipping ghostty, re-enable scottames/ghostty
   # AND audit for conflicts with danklinux before re-enabling.
 ]
-# ── Packages ──────────────────────────────────────────────────────────────────
+# ── Plymouth auto-scaling ────────────────────────────────────────────────────────
+# Plymouth's script.so exposes neither `Window.GetMaxWidthScale()`
+# nor any per-output enumeration API. The omedora script instead
+# derives a `scaling_factor` from the framebuffer width (see the
+# top of plymouth/omedora.script). Override that heuristic with an
+# explicit DeviceScale written into /etc/plymouth/plymouthd.conf by
+# the install. Common values:
+#   1 — single 1080p monitor, 2x DPI laptop internal display, etc.
+#   2 — 4K-class monitors, dual 1920+1920 setups Plymouth spans
+#       as one wide framebuffer.
+#   3 — 5K-class displays.
+# Set device_scale = 0 to keep the script's auto-derive (default).
+[plymouth]
+device_scale = 0
+
+# ── Packages  ──────────────────────────────────────────────────────────────────
 [packages.hyprland]
 # All from lionheartp/Hyprland COPR (must be enabled first).
 core = [

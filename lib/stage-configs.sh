@@ -56,10 +56,26 @@ stage_config_plymouth() {
     "${src}"/{omedora.plymouth,omedora.script,logo.png,lock.png,entry.png,bullet.png,progress_bar.png,progress_box.png} \
     "${theme_dir}/"
 
+
   if [[ -f "${src}/plymouthd.conf" ]]; then
     backup_and_install "${src}/plymouthd.conf" "/etc/plymouth/plymouthd.conf"
   fi
 
+  # Apply [plymouth].device_scale from omedora.toml. We update the
+  # installed /etc/plymouth/plymouthd.conf in-place rather than
+  # overwriting it wholesale, because the install-shipped file may
+  # already carry our (or the user's) manual edits — see how dracut
+  # rebuilds the initramfs downstream which pulls the new config in.
+  if [[ "${OMEDORA_PLYMOUTH_DEVICE_SCALE:-0}" -gt 0 ]]; then
+    if ! grep -q '^DeviceScale' /etc/plymouth/plymouthd.conf 2>/dev/null; then
+      echo "DeviceScale=${OMEDORA_PLYMOUTH_DEVICE_SCALE}" >> /etc/plymouth/plymouthd.conf
+      info "set DeviceScale=${OMEDORA_PLYMOUTH_DEVICE_SCALE} in /etc/plymouth/plymouthd.conf"
+    elif ! grep -q "^DeviceScale=${OMEDORA_PLYMOUTH_DEVICE_SCALE}" /etc/plymouth/plymouthd.conf; then
+      # Replace any existing DeviceScale= line with our value.
+      sed -i "s|^DeviceScale=.*|DeviceScale=${OMEDORA_PLYMOUTH_DEVICE_SCALE}|" /etc/plymouth/plymouthd.conf
+      info "updated DeviceScale to ${OMEDORA_PLYMOUTH_DEVICE_SCALE} in /etc/plymouth/plymouthd.conf"
+    fi
+  fi
   if command -v plymouth-set-default-theme >/dev/null 2>&1; then
     plymouth-set-default-theme "${theme}" || die "plymouth-set-default-theme failed"
   fi
