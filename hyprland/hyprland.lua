@@ -130,6 +130,9 @@ hl.layer_rule({ match = { namespace = "^dms:.*" }, no_anim = true })
 -- fresh install where dms hasn't run yet. dms/binds.lua and
 -- dms/binds-user.lua ARE shipped in the repo (binds is the upstream
 -- default, binds-user is our override), so those require normally.
+-- inputs.lua ships the keyboard layout, touchpad tuning, AND trackpad
+-- gestures via hl.gesture(); it's required unconditionally so gestures
+-- are active on the very first boot.
 local function safe_require(mod)
 	local ok, err = pcall(require, mod)
 	if not ok then
@@ -144,3 +147,4 @@ safe_require("dms.layout")
 safe_require("dms.cursor")
 require("dms.binds")
 require("dms.binds-user")
+require("inputs")  -- keyboard/touchpad config + trackpad gestures

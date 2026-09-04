@@ -120,12 +120,18 @@ dp = cfg.get("dms_plugins", {})
 emit("OMEDORA_DMS_PLUGINS", dp.get("plugins", []))
 emit("OMEDORA_DMS_REGISTRY", dp.get("registry", []))
 
+# userdirs — extra dir names appended to ~/.config/user-dirs.dirs
+# (in addition to the eight standard dirs xdg-user-dirs-update writes).
+userdirs_cfg = cfg.get("userdirs", {})
+emit("OMEDORA_USERDIR_DEV",      userdirs_cfg.get("xdg_dev_dir", "dev"))
+emit("OMEDORA_USERDIR_PROJECTS", userdirs_cfg.get("xdg_projects_dir", "projects"))
+emit("OMEDORA_USERDIR_PROGRAMS", userdirs_cfg.get("xdg_programs_dir", "programs"))
+
 # services
 svc = cfg.get("services", {})
 emit("OMEDORA_SERVICES_ENABLE", svc.get("enable", []))
 emit("OMEDORA_SERVICES_DEFAULT", svc.get("set_default", "graphical.target"))
 
-# stages
 stg = cfg.get("stages", {})
 for k, v in stg.items():
     emit(f"OMEDORA_STAGE_{k.upper()}", "true" if v else "false")

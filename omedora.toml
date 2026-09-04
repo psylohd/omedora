@@ -82,12 +82,25 @@ required = [
   "pavucontrol",
   # Power / night light / clipboard
   "power-profiles-daemon", "wlsunset",
-  # Portals / XDG
-  "xdg-desktop-portal-gtk", "xdg-user-dirs",
-  # Shell + tools
-  "fish", "fastfetch", "grim", "slurp",
-  "ghostty", "qt6ct",
-  "playerctl", "gnome-keyring",
+  # Secrets + XDG helpers
+  #   gnome-keyring       — provides the keyring D-Bus service, secrets storage
+  #   gnome-keyring-pam   — provides /usr/lib64/security/pam_gnome_keyring.so,
+  #                         which /etc/pam.d/greetd (Fedora-shipped) already
+  #                         references as `-auth optional pam_gnome_keyring.so`.
+  #                         Without this package the PAM line is a no-op and
+  #                         every browser launch prompts for the keyring
+  #                         password. With it, the keyring unlocks silently
+  #                         at greetd login.
+  #   xdg-user-dirs        — generates ~/Documents, ~/Pictures, etc. by
+  #                         writing ~/.config/user-dirs.dirs. The userdirs
+  #                         stage calls `xdg-user-dirs-update --force`.
+  #   xdg-utils            — xdg-mime / xdg-open / xdg-settings; provides
+  #                         "what app opens this file" for Hyprland-style
+  #                         file managers.
+  "gnome-keyring",
+  "gnome-keyring-pam",
+  "xdg-user-dirs",
+  "xdg-utils",
   # Boot splash
   "plymouth", "plymouth-plugin-script",   # plugin-script is required by omedora theme
   "papirus-icon-theme" # Icon pack
@@ -169,16 +182,37 @@ enable = [
 ]
 set_default = "graphical.target"
 
-# ── Stage toggles ─────────────────────────────────────────────────────────────
-[stages]
-copr      = true
-dnf       = true
-vendor    = true
-flatpak   = true
-plymouth  = true
-tuigreet  = true
-hyprland  = true
-quickshell = true
-greetd     = true
-dms        = true
-services   = true
+# ── Custom XDG user dirs ──────────────────────────────────────────────────────
+# `xdg-user-dirs-update --force` generates the eight standard dirs
+# (Desktop/Documents/Downloads/Music/Pictures/Public/Templates/Videos) and
+# writes ~/.config/user-dirs.dirs. omedora appends three extra dirs that
+# xdg-user-dirs-update does NOT natively support — each is created on first
+# run if missing. They are referenced everywhere in this repo and are not
+# optional.
+#
+#   $HOME/dev       — throwaway test repos, exploration, scratch
+#   $HOME/projects  — ongoing personal projects
+#   $HOME/programs  — symlinked bins, compiled-from-source, scripts
+#
+# Removing a custom dir here after install will not delete the on-disk
+# directory; it only stops reverting the .dirs file on reruns.
+[userdirs]
+xdg_dev_dir       = "dev"
+xdg_projects_dir  = "projects"
+xdg_programs_dir  = "programs"
+
+ # ── Stage toggles ─────────────────────────────────────────────────────────────
+ [stages]
+ copr      = true
+ dnf       = true
+ vendor    = true
+ flatpak   = true
+ plymouth  = true
+ tuigreet  = true
+ hyprland  = true
+ quickshell = true
+ greetd     = true
+ dms        = true
+ keyring    = true    # Enable pam_gnome_keyring in PAM + start --components=secrets
+ userdirs   = true    # xdg-user-dirs-update --force + custom dirs (dev/projects/programs)
+ services   = true

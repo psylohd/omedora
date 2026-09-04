@@ -44,6 +44,8 @@ declare -A TWEAK_FN=(
   [hyprland]=tweak_hyprland
   [quickshell]=tweak_quickshell
   [dms]=tweak_dms
+  [keyring]=tweak_keyring
+  [userdirs]=tweak_userdirs
   [services]=tweak_services
 )
 declare -A TWEAK_DESC=(
@@ -53,6 +55,8 @@ declare -A TWEAK_DESC=(
   [hyprland]="Deploy hyprland/ → ~/.config/hypr/"
   [quickshell]="Deploy quickshell/ → ~/.config/quickshell/"
   [dms]="Deploy DankMaterialShell/ + install plugins from [dms_plugins]"
+  [keyring]="Wire pam_gnome_keyring in PAM + ensure autostart entry"
+  [userdirs]="xdg-user-dirs-update --force + write ~/dev, ~/projects, ~/programs"
   [services]="systemctl enable + set-default graphical.target"
 )
 
@@ -73,10 +77,10 @@ source "${SCRIPT_DIR}/lib/stage-copr.sh"
 source "${SCRIPT_DIR}/lib/stage-dnf.sh"
 source "${SCRIPT_DIR}/lib/stage-vendor.sh"
 source "${SCRIPT_DIR}/lib/stage-configs.sh"
-source "${SCRIPT_DIR}/lib/stage-greetd.sh"
+source "${SCRIPT_DIR}/lib/stage-userdirs.sh"
 source "${SCRIPT_DIR}/lib/stage-services.sh"
 source "${SCRIPT_DIR}/lib/stage-flatpak.sh"
-source "${SCRIPT_DIR}/lib/stage-dms.sh"
+source "${SCRIPT_DIR}/lib/stage-keyring.sh"
 
 tweak_plymouth()   { section "tweak: plymouth";   stage_config_plymouth; }
 tweak_tuigreet()   { section "tweak: tuigreet";   stage_config_tuigreet; }
@@ -92,6 +96,8 @@ tweak_quickshell() {
   stage_config_quickshell "${home}"
 }
 tweak_dms()        { section "tweak: dms";        stage_dms; }
+tweak_keyring()    { section "tweak: keyring";    stage_keyring; }
+tweak_userdirs()   { section "tweak: userdirs";   stage_user_dirs; }
 tweak_services()   { section "tweak: services";   stage_services; }
 
 # ── --diff: preview what the tweak would do (no writes) ──────────────────────
