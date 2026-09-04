@@ -184,6 +184,14 @@ required = [
   "plymouth", "plymouth-plugin-script",   # plugin-script is required by omedora theme
   "papirus-icon-theme", # Icon pack
 ]
+# ── Vendored source builds ─────────────────────────────────────────────────────
+# tuigreet is built from a git fork at install time. The vendor stage clones
+# it, runs `cargo build --release`, and installs the binary to /usr/local/bin/.
+# branch defaults to "master" — change if the fork uses a different base.
+[vendored.tuigreet]
+repo_url = "https://github.com/psylohd/tuigreet.git"
+branch   = "master"
+commit   = ""        # optional: pin to a specific commit hash
 
 optional_copr = [
   "wl-clip-persist",                # from leloubil/wl-clip-persist

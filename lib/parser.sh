@@ -95,11 +95,11 @@ emit("OMEDORA_DOCKER", _docker_pkgs)
 dms_cfg = cfg.get("packages", {}).get("dms", {})
 emit("OMEDORA_DMS_WEAK_DEPS", str(bool(dms_cfg.get("install_weak_deps", True))).lower())
 
-# vendored tuigreet (build from source) — under [paths.repo]
-vtg_cfg = cfg.get("paths", {}).get("repo", {})
-emit("OMEDORA_TUIGREET_REPO_URL",  vtg_cfg.get("vendored_tuigreet_repo_url", ""))
-emit("OMEDORA_TUIGREET_BRANCH",    vtg_cfg.get("vendored_tuigreet_branch", ""))
-emit("OMEDORA_TUIGREET_COMMIT",    vtg_cfg.get("vendored_tuigreet_commit", ""))
+vendored_cfg = cfg.get("vendored", {})
+vtg_cfg = vendored_cfg.get("tuigreet", {})
+emit("OMEDORA_TUIGREET_REPO_URL",  vtg_cfg.get("repo_url", ""))
+emit("OMEDORA_TUIGREET_BRANCH",    vtg_cfg.get("branch", ""))
+emit("OMEDORA_TUIGREET_COMMIT",    vtg_cfg.get("commit", ""))
 
 # flatpak
 # zen_browser extensions — XPI URLs installed inside the Zen Flatpak sandbox
