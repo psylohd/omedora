@@ -35,13 +35,44 @@
 local scrPath = (os.getenv("HOME") or "") .. "/.config/hypr/Scripts"
 
 -- ── 1. Clear conflicting DMS defaults before re-binding ──────────────────────
+--
+-- dms upstream binds a lot of SUPER-prefixed keys. If we don't unbind
+-- them first, our re-binds become DUPLICATE bindings rather than
+-- overrides, and Hyprland picks one or the other depending on internal
+-- dispatch ordering — which produces the "keybinds kind of work
+-- unreliably" symptom (sometimes SUPER+1 goes to dms's workspace
+-- focus, sometimes to ours, with no apparent rhyme).
+--
+-- Hyprland `hl.unbind` on a never-bound key is a documented no-op, so
+-- being exhaustive is safe; we list every key we re-bind below plus
+-- the Omarchy-style keys we expect dms might bind on a fresh install.
 local conflicts = {
-	"SUPER + space",
-	"ALT + space",
-	"SUPER + T",
-	"SUPER + L",
+	-- App launching (we redefine these below)
+	"SUPER + RETURN",
+	"SUPER + SHIFT + F",
+	"SUPER + E",
+	"SUPER + B",
+	"SUPER + M",
+	"SUPER + SPACE",
+	"SUPER + CTRL + SPACE",
 	"SUPER + K",
-	"SUPER + F",
+	-- Workspace focus + send-window (we redefine all 10)
+	"SUPER + 1", "SUPER + 2", "SUPER + 3", "SUPER + 4", "SUPER + 5",
+	"SUPER + 6", "SUPER + 7", "SUPER + 8", "SUPER + 9", "SUPER + 0",
+	"SUPER + SHIFT + 1", "SUPER + SHIFT + 2", "SUPER + SHIFT + 3",
+	"SUPER + SHIFT + 4", "SUPER + SHIFT + 5", "SUPER + SHIFT + 6",
+	"SUPER + SHIFT + 7", "SUPER + SHIFT + 8", "SUPER + SHIFT + 9",
+	"SUPER + SHIFT + 0",
+	-- Directional focus + swap (we redefine all four)
+	"SUPER + LEFT",  "SUPER + RIGHT", "SUPER + UP", "SUPER + DOWN",
+	"SUPER + SHIFT + LEFT",  "SUPER + SHIFT + RIGHT",
+	"SUPER + SHIFT + UP",    "SUPER + SHIFT + DOWN",
+	-- Window management (we redefine Q, W, T, F, V)
+	"SUPER + Q", "SUPER + W", "SUPER + T", "SUPER + F", "SUPER + V",
+	-- Layout toggle + reload + exit
+	"SUPER + L", "SUPER + SHIFT + L", "SUPER + R", "SUPER + Escape",
+	-- ALT-space (kept for safety — dms has historically bound this)
+	"ALT + space",
 }
 for _, key in ipairs(conflicts) do
 	hl.unbind(key)
@@ -89,6 +120,11 @@ end
 -- ── 4. Directional focus + swap ─────────────────────────────────────────────
 -- Hyprland dispatcher names use "l", "r", "u", "d" for direction swaps
 -- (single-letter) and full words ("left", "right", "up", "down") for focus.
+--
+-- Layout toggle is bound to SUPER + L only (see § 6). SHIFT + L was
+-- removed: layouts mutate window arrangement and shipping two bind
+-- surfaces for the same mutation made the layout "feel unpredictable"
+-- whenever a stray Shift modifier flipped it.
 local dirs = {
 	{ focus = "left",  arrow = "LEFT",  swap = "l" },
 	{ focus = "right", arrow = "RIGHT", swap = "r" },
@@ -127,10 +163,7 @@ hl.bind("SUPER + L",
 	hl.dsp.exec_cmd(scrPath .. "/omarchy-hyprland-workspace-layout-toggle"),
 	{ description = "Toggle dwindle/scrolling layout" }
 )
-hl.bind("SUPER + SHIFT + L",
-	hl.dsp.exec_cmd(scrPath .. "/omarchy-hyprland-workspace-layout-toggle"),
-	{ description = "Toggle layout (SHIFT-L alias)" }
-)
+-- Layout toggle bound to SUPER + L only. The previous SUPER + SHIFT + L
 
 -- ── 7. Misc / utility ───────────────────────────────────────────────────────
 hl.bind("SUPER + R",

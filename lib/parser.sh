@@ -115,6 +115,14 @@ emit("OMEDORA_PATH_HYPRLAND", repo_abs(p.get("hyprland", "hyprland")))
 emit("OMEDORA_PATH_DMS", repo_abs(p.get("dms", "DankMaterialShell")))
 emit("OMEDORA_PATH_QUICKSHELL", repo_abs(p.get("quickshell", "quickshell")))
 
+# [hyprland].monitors — explicit per-monitor `monitor=NAME,WxH@RRR,XxY,SCALE`
+# entries that stage-configs.sh appends to the deployed hyprland.lua.
+# Empty list (the default) means "let dms autodetect on first launch"
+# — see the comment in omedora.toml and the Scaling Note block at the
+# top of hyprland.lua for why this exists.
+hl_cfg = cfg.get("hyprland", {})
+emit("OMEDORA_HYPRLAND_MONITORS", hl_cfg.get("monitors", []))
+
 # dms plugins
 dp = cfg.get("dms_plugins", {})
 emit("OMEDORA_DMS_PLUGINS", dp.get("plugins", []))

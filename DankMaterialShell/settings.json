@@ -338,7 +338,9 @@
     "hyprland": {
       "hideOnKeyPress": false,
       "hideOnTouch": false,
-      "inactiveTimeout": 0
+      "inactiveTimeout": 0,
+      "hideOnOverlayOpen": false,
+      "hideDuringFullscreen": false
     },
     "dwl": {
       "cursorHideTimeout": 0
@@ -355,8 +357,9 @@
   "launcherLogoContrast": 1,
   "launcherLogoSizeOffset": -8,
   "fontFamily": "Noto Sans",
-  "monoFontFamily": "Fira Code",
-  "fontWeight": 400,
+  "fontScale": 1,
+  "monitorScale": 1,
+  "autoMonitorScale": true,
   "fontScale": 1,
   "textRenderType": 0,
   "textRenderQuality": 0,

@@ -183,6 +183,26 @@ stage_config_hyprland() {
   backup_and_copy_tree "${src}" "${home}/.config/hypr"
   chown -R "${OMEDORA_TARGET_USER}:${OMEDORA_TARGET_USER}" "${home}/.config/hypr"
   chown "${OMEDORA_TARGET_USER}:${OMEDORA_TARGET_USER}" "${home}/.config"
+
+  # If the user configured [hyprland].monitors in omedora.toml, append
+  # them as `monitor = "..."` lines to the deployed hyprland.lua so
+  # they're active on first boot, before dms has had a chance to write
+  # dms/outputs.lua. Format matches Hyprland's monitor line; e.g.
+  # "eDP-1,2880x1800@120,0x0,2" → monitor = "eDP-1,2880x1800@120,0x0,2".
+  if [[ ${#OMEDORA_HYPRLAND_MONITORS[@]} -gt 0 ]]; then
+    local hlconf="${home}/.config/hypr/hyprland.lua"
+    if [[ -f "${hlconf}" ]]; then
+      info "appending ${#OMEDORA_HYPRLAND_MONITORS[@]} explicit monitor line(s) to hyprland.lua"
+      {
+        printf '\n-- omedora: explicit per-monitor lines from [hyprland].monitors\n'
+        printf -- '-- (appended by stage-configs.sh; survives tweaks.sh hyprland reruns)\n'
+        for m in "${OMEDORA_HYPRLAND_MONITORS[@]}"; do
+          printf 'monitor = %q\n' "${m}"
+        done
+      } >> "${hlconf}"
+      chown "${OMEDORA_TARGET_USER}:${OMEDORA_TARGET_USER}" "${hlconf}"
+    fi
+  fi
 }
 
 stage_config_quickshell() {

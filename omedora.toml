@@ -67,6 +67,31 @@ core = [
   "hyprpaper", "hyprlock", "hypridle", "hyprshot", "hyprpicker",
   "hyprsunset", "hyprsysteminfo", "hyprlauncher", "hyprshutdown",
 ]
+# ── Per-monitor overrides (optional) ─────────────────────────────────────────
+# dms writes `monitor=NAME,WxH@RRR,XxY,SCALE` lines into
+# ~/.config/hypr/dms/outputs.lua on first launch. If your monitor is
+# HiDPI and the first boot looks mis-scaled, set explicit entries here
+# and the installer will append them to the deployed hyprland.lua so
+# they are honoured before dms has a chance to autodetect.
+#
+# Format: each entry is "<name>,<width>x<height>@<refresh>,<x>x<y>,<scale>"
+#   * name      — Hyprland connector name (DP-1, HDMI-A-1, eDP-1, ...).
+#                 Run `hyprctl monitors` after first boot to discover.
+#   * width/height/refresh — preferred mode. Use `auto` to let Hyprland
+#                 pick the highest available rate.
+#   * x/y       — monitor position in the global layout. 0x0 for the
+#                 primary; offsets in pixels for additional monitors.
+#   * scale     — 1.0 for standard density, 1.5 for HiDPI laptops,
+#                 2.0 for 4K displays, etc.
+#
+# Examples:
+#   "eDP-1,2880x1800@120,0x0,2"
+#   "DP-1,auto,2880x0,1"
+#   "HDMI-A-1,1920x1080@60,5760x0,1"
+#
+# Empty list (default) means "let dms handle it on first launch".
+[hyprland]
+monitors = []
 [packages.quickshell]
 # All from official Fedora. quickshell 0.2.1 ships in F44.
 runtime = [
@@ -125,9 +150,13 @@ required = [
   "gnome-keyring-pam",
   "xdg-user-dirs",
   "xdg-utils",
+  # desktop-file-utils provides `update-desktop-database`, which
+  # stage-flatpak.sh runs after every flatpak install so dms /
+  # xdg-desktop-portal can see fresh .desktop entries without a
+  # re-login. On a bare Fedora Server install this isn't pulled in
+  # transitively by anything else we install, so we list it here.
+  "desktop-file-utils",
   # Boot splash
-  "plymouth", "plymouth-plugin-script",   # plugin-script is required by omedora theme
-  "papirus-icon-theme" # Icon pack
 ]
 
 optional_copr = [

@@ -22,42 +22,73 @@ local dms_env = {
     "MOZ_ENABLE_WAYLAND,1",
     "_JAVA_AWT_WM_NONREPARENTING,1",
     "ELECTRON_OZONE_PLATFORM_HINT,wayland",
+    -- XDG_DATA_DIRS: include the flatpak export roots so dms /
+    -- xdg-desktop-portal can enumerate flatpak .desktop files
+    -- without scanning the whole filesystem. Default Fedora value
+    -- is "/usr/local/share:/usr/share"; we append both flatpak
+    -- export trees. The user-scope one resolves at runtime against
+    -- $HOME, so `${HOME}` is substituted literally — Hyprland's
+    -- hl.env does NOT expand env vars, so we hardcode the prefix
+    -- for the system scope and let the user scope inherit from
+    -- dbus-update-activation-environment (which systemd evaluates
+    -- $HOME against).
+    "XDG_DATA_DIRS,/usr/local/share:/usr/share:/var/lib/flatpak/exports/share",
 }
 for _, item in ipairs(dms_env) do
     local key, value = item:match("^([^,]+),(.+)$")
     if key and value then hl.env(key, value) end
 end
-
 hl.on("hyprland.start", function()
 	hl.exec_cmd("dbus-update-activation-environment --systemd --all")
 	hl.exec_cmd("systemctl --user start hyprland-session.target")
-	-- dms.service: the user manager evaluates Wants/Requisite at
-	-- evaluation time, not continuously. `hyprland-session.target`'s
-	-- BindsTo activates graphical-session.target AFTER dms.service's
-	-- first eval (the user manager is racing Hyprland's init hook).
-	-- We fire dms.service explicitly here, AFTER starting the session
-	-- target, so its `Requisite=graphical-session.target` is now
-	-- active by the time systemd re-evaluates.
-	hl.exec_cmd("systemctl --user start dms.service")
+	-- dms.service is started automatically via the
+	-- default.target.wants/dms.service symlink installed by
+	-- stage-dms.sh. Once hyprland-session.target is active (line
+	-- above), the symlink + the unit's `WantedBy=graphical-session
+	-- .target` cause dms.service to autostart.
+	--
+	-- We deliberately do NOT call `systemctl --user start dms.service`
+	-- here. Doing so races the systemd user manager's Wants=graphical
+	-- -session.target evaluation and occasionally launches dms twice
+	-- (once from the explicit start, once from the Wants= edge),
+	-- which breaks IPC and produces flaky keybinds because binds.lua
+	-- gets loaded twice with different timing.
 	require("startup")  -- sets exec_once list (polkit, easyeffects, wl-clip-persist, ...)
 end)
--- DMS_STARTUP_END
+-- Inputs (keyboard, mouse, touchpad, gestures) live in inputs.lua.
+-- hyprland.lua does NOT call hl.config({ input = ... }) — calling it
+-- twice either replaces the table wholesale (older Hyprland) or merges
+-- in undefined order (newer Lua config), which previously left
+-- follow_mouse = 0 in this file overwritten by follow_mouse = 1 in
+-- inputs.lua (or vice versa) and produced the "auto-focus on hover"
+-- symptom. inputs.lua is the single source of truth.
+--
+-- general / decoration / dwindle / master / misc defaults live here
+-- because they are not user-overridable at runtime; if you want to
+-- tweak them, edit this block and `hyprctl reload`.
+--
+-- xdg-desktop-portal / cursor settings: XDG_DATA_DIRS and friends are
+-- exported at the top of this file (see the dms_env table above).
+-- Flatpak installs dump `.desktop` files into /var/lib/flatpak/exports/
+-- share/applications and ~/.local/share/flatpak/exports/share/
+-- applications — those directories MUST be in XDG_DATA_DIRS for dms
+-- to see them via xdg-desktop-portal. stage-flatpak.sh also runs
+-- update-desktop-database after installs so the desktop cache is
+-- populated even before the user logs in again.
 hl.config({
-	input = {
-		-- empty inherits XKB_DEFAULT_LAYOUT (libxkbcommon), falls back to "us"
-		kb_layout = "",
-		numlock_by_default = true,
-		follow_mouse = 0,
-		touchpad = {
-			tap_to_click = true,
-			natural_scroll = true,
-		},
-	},
+	-- Per-workspace layout is owned by dms (it writes
+	-- hl.workspace_rule(workspace=ID, layout=...) entries into
+	-- dms/layout.lua on first launch). The previous `layout =
+	-- "dwindle"` set here conflicted with dms's per-workspace rules
+	-- and produced the "window arrangement is unpredictable"
+	-- symptom: some workspaces got dwindle (from this default),
+	-- others got scrolling (from dms), and toggling SUPER+L
+	-- scrambled the rest. Remove the layout key here; dms is the
+	-- single source of truth for layout.
 	general = {
 		gaps_in = 5,
 		gaps_out = 5,
 		border_size = 2,
-		layout = "dwindle",
 	},
 	decoration = {
 		rounding = 12,
@@ -82,7 +113,19 @@ hl.config({
 		mfact = 0.5,
 	},
 })
-
+-- Scaling note: Hyprland sets per-monitor scale via `monitor=NAME,
+-- WIDTHxHEIGHT@RRR, POSITION, SCALE` lines. omedora does NOT emit
+-- those lines by default — dms writes them on first launch into
+-- dms/outputs.lua (which we safe_require below). The first boot will
+-- therefore render at 1x on every monitor, and dms will read the
+-- current scale and rewrite dms/outputs.lua on the second boot. If
+-- your hardware is HiDPI and the first boot looks tiny/huge, hit
+-- SUPER+R (reload) after dms has had ~3 seconds to write outputs.lua
+-- OR set explicit monitor scale in omedora.toml's [hyprland].monitors
+-- list — see omedora.toml for the format. This is the root cause of
+-- the "scaling between dms and Hyprland windows doesn't match"
+-- symptom on a fresh install.
+--
 -- Snappy animations. Use linear/quick curves (fast ramp, no long easing tail)
 -- and high speeds. appleEaseInOut's symmetric shape felt slow even at 20x;
 -- linear with high speed feels instant while still having a visible transition.
