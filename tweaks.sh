@@ -98,15 +98,10 @@ tweak_quickshell() {
 tweak_dms() {
   section "tweak: dms"
   stage_dms
-  # If the user manager is running (user is logged in via Hyprland), it
-  # won't see the local override unit we just wrote until daemon-reload.
-  # Try it; fall back silently if no manager is up. The next login
-  # picks the override up unconditionally regardless.
-  if command -v systemctl >/dev/null \
-     && sudo -u "${OMEDORA_TARGET_USER}" XDG_RUNTIME_DIR="/run/user/$(id -u "${OMEDORA_TARGET_USER}")" \
-        systemctl --user daemon-reload 2>/dev/null; then
-    info "user manager reloaded; dms.service override is active immediately"
-  fi
+  # stage_dms already runs `systemctl --user daemon-reload` itself when
+  # a user manager is up, so there's nothing to add here. Tweaking again
+  # is idempotent: lingering is a no-op if already on, and the cleanup
+  # block reclaims ownership + removes any stale dms.service artifacts.
 }
 tweak_keyring()    { section "tweak: keyring";    stage_keyring; }
 tweak_userdirs()   { section "tweak: userdirs";   stage_user_dirs; }
