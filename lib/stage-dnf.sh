@@ -35,6 +35,32 @@ stage_dnf() {
     dnf5 -y config-manager addrepo --from-repofile "${_repo_url}" \
       || warn "failed to add repo ${_repo_url} (continuing)"
   done
+  # Vendored .repo files — when upstream doesn't host a stable .repo URL
+  # (so `dnf5 config-manager addrepo --from-repofile` can't reach it), we
+  # ship the repo contents in-repo and write them under /etc/yum.repos.d/.
+  # Each entry surfaces two env vars: ``OMEDORA_VENDORED_REPO_<NAME>__FILE``
+  # (verbatim .repo content; `\n` escapes are decoded by printf %b) and
+  # ``OMEDORA_VENDORED_REPO_<NAME>__PACKAGE`` (package to install after).
+  # The repo filename mirrors the section key (slashes / hyphens turn
+  # into underscores to stay legal as a filename on every filesystem).
+  for _vr_var in $(compgen -v OMEDORA_VENDORED_REPO_ 2>/dev/null); do
+    [[ "${_vr_var}" == *__FILE ]] && continue
+    local _vr_pkg="${!_vr_var}"
+    [[ -n "${_vr_pkg}" ]] || continue
+    local _vr_name="${_vr_var#OMEDORA_VENDORED_REPO_}"
+    _vr_name="${_vr_name%__PACKAGE}"
+    local _vr_name_lc="${_vr_name,,}"   # lowercase for filename
+    local _vr_file_var="OMEDORA_VENDORED_REPO_${_vr_name}__FILE"
+    local _vr_content="${!_vr_file_var}"
+    [[ -n "${_vr_content}" ]] || continue
+    local _vr_path="/etc/yum.repos.d/${_vr_name_lc}.repo"
+    info "writing vendored repo: ${_vr_path} (will install: ${_vr_pkg})"
+    # printf %b decodes \n escapes that python's repr() put into the string
+    # when TOML triple-quoted strings went through emit().
+    printf '%b\n' "${_vr_content}" > "${_vr_path}" \
+      || warn "failed to write ${_vr_path}"
+    chmod 0644 "${_vr_path}"
+  done
 
   # Snapshot the COPR setopt flags once — every install below appends them.
   local copr_flags=()
@@ -94,13 +120,13 @@ stage_dnf() {
   fi
 
   # Post-install verification: ghostty is the SUPER+RETURN terminal
-  # launch target. It comes in as a weak-dep of dms or another
-  # danklinux package; on a fresh install with weak-deps enabled,
-  # dnf can silently skip it if its transaction conflicts (especially
-  # when scottames/ghostty is also enabled — see [coprs] in
-  # omedora.toml). If ghostty didn't land, retry from the danklinux
-  # COPR explicitly. Failing the whole stage just because of a weak-
-  # dep is overzealous; a loud warning is the right level.
+  # launch target. Listed explicitly in [packages.apps].required so the
+  # install doesn't depend on it being a weak-dep of dms (which dnf5
+  # sometimes drops silently on a transaction conflict). This check is
+  # belt-and-braces: if the explicit install failed for whatever reason,
+  # try the deprecated weak-dep recovery path one last time. A loud
+  # warning is the right level — failing the whole dnf stage for a
+  # single optional app is overzealous.
   if ! rpm -q ghostty >/dev/null 2>&1; then
     warn "ghostty not installed after dnf stage; retrying from avengemedia/danklinux"
     if dnf5 -y install --setopt='avengemedia/danklinux.gpgcheck=0' \

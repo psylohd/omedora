@@ -100,11 +100,39 @@ vtg_cfg = vendored_cfg.get("tuigreet", {})
 emit("OMEDORA_TUIGREET_REPO_URL",  vtg_cfg.get("repo_url", ""))
 emit("OMEDORA_TUIGREET_BRANCH",    vtg_cfg.get("branch", ""))
 emit("OMEDORA_TUIGREET_COMMIT",    vtg_cfg.get("commit", ""))
-
 # flatpak
-# zen_browser extensions — XPI URLs installed inside the Zen Flatpak sandbox
+# Two scopes per the flatpak CLI: `--system` lands apps at /var/lib/flatpak
+# (visible to every user; the only mode that survives a multi-user setup),
+# `--user` lands at ~/.local/share/flatpak (per-user, doesn't show up in
+# other users' launchers). Zen Browser lives on Flathub; we install it
+# system-scope so a fresh, single-user install sees Zen in dms's launcher
+# without needing per-user remote-list bootstrapping.
+fp = cfg.get("flatpak", {})
+emit("OMEDORA_FLATPAK_SYSTEM", fp.get("system", []))
+emit("OMEDORA_FLATPAK_USER",   fp.get("user", []))
+
+# zen_browser extensions — XPI URLs installed into the Zen Flatpak sandbox.
+# This stays separate from [flatpak]; it's a list of post-install extensions,
+# not Zen's own install location (which is governed by OMEDORA_FLATPAK_SYSTEM
+# above). Empty list = no extensions added.
 zb = cfg.get("zen_browser", {})
 emit("OMEDORA_ZEN_EXTENSIONS", zb.get("extensions", []))
+
+# vendored_repos — .repo files we ship verbatim into /etc/yum.repos.d/.
+# Used when an upstream doesn't host a stable .repo URL (so `dnf5
+# config-manager addrepo --from-repofile` can't fetch them) and we
+# want the contents pinned in-repo. Each entry exposes:
+#   repo_file  — verbatim content of the .repo file
+#   package    — package name to install once the repo is enabled
+# The repo filename is derived from the section key (e.g.
+# `[vendored_repos.vscodium]` → /etc/yum.repos.d/vscodium.repo).
+vr = cfg.get("vendored_repos", {})
+for _name, _entry in vr.items():
+    safe_name = _name.replace("-", "_").replace(" ", "_")
+    emit(f"OMEDORA_VENDORED_REPO_{safe_name.upper()}__FILE",
+         _entry.get("repo_file", ""))
+    emit(f"OMEDORA_VENDORED_REPO_{safe_name.upper()}__PACKAGE",
+         _entry.get("package", ""))
 
 
 # greeter

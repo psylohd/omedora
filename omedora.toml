@@ -183,6 +183,19 @@ required = [
   "pciutils",
   "plymouth", "plymouth-plugin-script",   # plugin-script is required by omedora theme
   "papirus-icon-theme", # Icon pack
+
+  # ghostty — SUPER+RETURN terminal launch target. Originally a weak-dep
+  # of dms from avengemedia/danklinux, but dnf5 occasionally skips weak
+  # deps on a transaction conflict. Listing explicitly removes the bet.
+  "ghostty",
+  # codium — VScodium (open-source MSVSCode build). Requires the
+  # [vendored_repos.vscodium] .repo to be written by stage_dnf first;
+  # both are sequenced in lib/stage-dnf.sh.
+  "codium",
+  # KVM/libvirt stack — pulled in as the @virtualization dnf5 group
+  # (libvirt-daemon, qemu-kvm, virt-install, virt-manager, etc.). The
+  # libvirtd.service unit fires on first boot via [services].enable.
+  "@virtualization",
 ]
 # ── Vendored source builds ─────────────────────────────────────────────────────
 # tuigreet is built from a git fork at install time. The vendor stage clones
@@ -192,6 +205,28 @@ required = [
 repo_url = "https://github.com/psylohd/tuigreet.git"
 branch   = "master"
 commit   = ""        # optional: pin to a specific commit hash
+
+# ── Vendored .repo files ──────────────────────────────────────────────────────
+# Used when an upstream project doesn't host a `.repo` file at a stable URL
+# (so `dnf5 config-manager addrepo --from-repofile` can't fetch them) and we
+# want the repo definition pinned in-repo. Each entry:
+#
+#   repo_file  — verbatim content written to /etc/yum.repos.d/<name>.repo
+#   package    — package name installed after the repo is written
+#
+# Repo is loaded BEFORE the package install, so dnf5 sees it on first try.
+[vendored_repos.vscodium]
+repo_file = '''
+[gitlab.com_paulcarroty_vscodium_repo]
+name=gitlab.com_paulcarroty_vscodium_repo
+baseurl=https://paulcarroty.gitlab.io/vscodium-deb-rpm-repo/rpms/
+enabled=1
+gpgcheck=1
+repo_gpgcheck=1
+gpgkey=https://gitlab.com/paulcarroty/vscodium-deb-rpm-repo/raw/master/pub.gpg
+metadata_expire=1h
+'''
+package = "codium"
 
 optional_copr = [
   "wl-clip-persist",                # from leloubil/wl-clip-persist
@@ -211,6 +246,23 @@ optional_copr = [
 # qt6ct, qt6-qtmultimedia) are installed by default. Pass
 # --setopt=install_weak_deps=False to skip them.
 install_weak_deps = true
+
+# ── Flatpak apps ──────────────────────────────────────────────────────────────
+# Apps distributed only on Flathub (no dnf equivalent on Fedora). We
+# install system-scope so the desktop user's launcher / dms menu sees
+# them without per-user remote-list bootstrapping.
+#
+#   system — installed under /var/lib/flatpak, visible to every user.
+#            Use this for shared infrastructure (Zen Browser).
+#   user   — installed under ~/.local/share/flatpak for the desktop user
+#            only. `stage_flatpak` adds the per-user flathub remote when
+#            this list is non-empty.
+[flatpak]
+system = [
+  "app.zen_browser.zen",          # Zen Browser — every fresh box
+]
+user = [
+]
 [zen_browser]
 # Extensions installed into the Zen Browser Flatpak after it is deployed.
 # Each entry is an XPI URL. Extensions are installed per-user inside the
@@ -286,6 +338,13 @@ enable = [
   "greetd.service",
   "plymouth-start.service",
   "docker.service",
+  # libvirtd.service — KVM/libvirt daemon. The @virtualization dnf5
+  # group installs libvirt-daemon but does not start it — this is the
+  # start-enable bit. virt-manager (also in @virtualization) talks to
+  # this socket; the desktop user is added to the `libvirt` group in
+  # lib/stage-services.sh so they skip the libvirt auth polkit prompt
+  # on every guest launch.
+  "libvirtd.service",
 ]
 set_default = "graphical.target"
 
