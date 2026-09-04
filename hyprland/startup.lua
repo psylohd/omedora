@@ -19,17 +19,16 @@ local exec_once = {
     "/usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1 || /usr/libexec/polkit-gnome-authentication-agent-1",
     "gnome-keyring-daemon --start --components=secrets",
     "systemctl --user start --ignore-dependencies xdg-desktop-portal-hyprland.service xdg-desktop-portal.service",
-    -- dms: launched in exec_once rather than via systemd's user
-    -- `dms.service`. Upstream ships the service with
-    -- `Requisite=graphical-session.target`, which never fires under a
-    -- bare greetd+Hyprland setup (no GNOME/KDE session manager), so
-    -- systemd refuses to start the unit even after we override the
-    -- vendor file. The exec-once path is what every Hyprland-on-Fedora
-    -- rollout (Hyprland RPM, Omarchy, custom setups) uses; it's
-    -- simpler, doesn't fight `graphical-session.target`, and we never
-    -- miss a sync because Hyprland's exec_once runs deterministically
-    -- at session start.
-    "dms run",
+    -- dms is started by dms.service (the user unit, NOT `dms run`
+    -- directly). The wiki "Services / dms.service" pattern relies
+    -- on hyprland-session.target being live at session start —
+    -- hyprland.lua calls `systemctl --user start
+    -- hyprland-session.target`, which propagates BindsTo=
+    -- graphical-session.target live, which satisfies dms.service's
+    -- `Requisite=graphical-session.target` line, which in turn fires
+    -- dms.service via `WantedBy=graphical-session.target`. We do NOT
+    -- `dms run` here — running dms twice (once from exec-once, once
+    -- via systemd) races the IPC socket and breaks notifications.
     "wl-clip-persist --clipboard regular",
     "sh -c 'sleep 3 && easyeffects --gapplication-service'",
 }

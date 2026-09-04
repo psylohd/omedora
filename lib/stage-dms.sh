@@ -103,30 +103,27 @@ stage_dms() {
     done
   fi
 
-  # ── Enable lingering + clean up any half-installed dms.service state ─────
-  #
-  # We do NOT install/enable dms.service. The upstream dms unit hard-codes
-  # `Requisite=graphical-session.target`, which never fires under a bare
-  # Hyprland+greetd session (no GNOME/KDE session manager is ever pulled
-  # in). With that Requisite unresolved, systemd refuses to start the
-  # service with "Dependency failed" — that's the failure mode a clean
-  # VM install hits on first login. Override unit files fix part of it
-  # but the underlying incompatibility remains.
-  #
-  # What every Hyprland-on-Fedora rollout does instead: launch `dms run`
-  # from Hyprland's `exec-once` block. We do the same — see
-  # hyprland/startup.lua. It's deterministic, doesn't fight
-  # `graphical-session.target`, and runs at exactly the right moment
-  # (once per Hyprland session start).
-  #
-  # What we DO still need from systemd: lingering. Otherwise the user's
-  # systemd manager dies at logout, taking keyring/portals with it;
-  # auto-login setups would silently lose their user services.
+  # ── Enable dms.service + lingering ───────────────────────────────────────────
+  # dms.service upstream ships with `Requisite=graphical-session.target` and
+  # `WantedBy=graphical-session.target`. With nothing pulling that target
+  # live on a bare Hyprland+greetd install, dms.service fails with
+  # `Job dms.service/start failed with result 'dependency'` on first login.
+  # We close the loop by shipping `hyprland-session.target` (in
+  # hyprland/systemd-user/) which `BindsTo=` graphical-session.target.
+  # hyprland.lua calls `systemctl --user start hyprland-session.target`
+  # at session start; that pulls graphical-session.target live, which
+  # satisfies dms's Requisite= and triggers dms's WantedBy= to autostart.
+  # See wiki.hypr.land/Useful-Utilities/Systemd-Integration
+  # "Services / dms.service" for the canonical pattern.
   if ! id "${target_user}" >/dev/null 2>&1; then
-    warn "target_user ${target_user} not found; skipping lingering setup"
+    warn "target_user ${target_user} not found; skipping dms.service setup"
     return 0
   fi
 
+  # ── Lingering ────────────────────────────────────────────────────────────────
+  # Without lingering the user's systemd manager dies at logout. dms.service,
+  # keyring agents, portals — all of it drops on logout. Auto-login setups
+  # silently lose their user services without it.
   if ! loginctl enable-linger "${target_user}" 2>/dev/null; then
     # Already-enabled returns nonzero on some systemd versions; check.
     if [[ "$(loginctl show-user "${target_user}" 2>/dev/null \
@@ -139,23 +136,47 @@ stage_dms() {
     info "enabled lingering for ${target_user}"
   fi
 
-  # Drop any leftover dms.service state from earlier omedora installs.
-  # Stale symlinks pointing at a unit systemd will never start produce
-  # confusing `systemctl --user is-enabled dms.service` output. Reclaim
-  # ownership of the directory first so the user can later edit/delete
-  # their own tree without sudo. Silent if no prior install ran.
+  # ── Enable dms.service ──────────────────────────────────────────────────────
+  # Drops a symlink at default.target.wants/dms.service. That auto-fires on
+  # every user login once hyprland-session.target is started (see
+  # hyprland.lua). We use default.target.wants rather than enabling at
+  # install time directly because:
+  #   * `systemctl --user enable` requires a running user manager
+  #     (`XDG_RUNTIME_DIR=/run/user/<uid>`), silently absent on a fresh install.
+  #     Writing the symlink ourselves works regardless of session state.
+  #   * default.target is active for every logged-in user, unlike
+  #     graphical-session.target which is intermittent.
   local user_unit_dir="${user_home}/.config/systemd/user"
-  if [[ -d "${user_unit_dir}" ]]; then
-    chown -R "${target_user}:${target_user}" "${user_unit_dir}" 2>/dev/null || true
-    rm -f "${user_unit_dir}/dms.service" \
-          "${user_unit_dir}/default.target.wants/dms.service" \
-          "${user_unit_dir}/graphical-session.target.wants/dms.service" \
-          2>/dev/null || true
-    chown -R "${target_user}:${target_user}" "${user_unit_dir}" 2>/dev/null || true
+  install -d -o "${target_user}" -g "${target_user}" -m 0755 "${user_unit_dir}"
+
+  # Reclaim ownership of anything left over from previous omedora runs
+  # so we can rm it (stage runs as root) and so the user can later edit.
+  chown -R "${target_user}:${target_user}" "${user_unit_dir}" 2>/dev/null || true
+
+  # First, drop any stale enable symlinks for dms.service that pointed
+  # at an absent override unit file from a prior install run. Newer
+  # installs (this one) ship dms.service directly via the vendor unit
+  # + a default.target.wants/ enable symlink. Default dms.service lives
+  # at /usr/lib/systemd/user/dms.service; we point at it directly.
+  local service_src="/usr/lib/systemd/user/dms.service"
+  if [[ ! -f "${service_src}" ]]; then
+    warn "dms.service unit not found at ${service_src}; not enabling (dms RPM missing?)"
+  else
+    install -d -o "${target_user}" -g "${target_user}" -m 0755 \
+      "${user_unit_dir}/default.target.wants"
+    if ! ln -sf "${service_src}" \
+       "${user_unit_dir}/default.target.wants/dms.service"; then
+      warn "failed to symlink dms.service into default.target.wants/"
+    else
+      chown -h "${target_user}:${target_user}" \
+        "${user_unit_dir}/default.target.wants/dms.service"
+      info "dms.service auto-start symlink installed"
+    fi
   fi
 
   # Tell the running user manager to forget any leftover unit state.
-  # Silent if no manager is up (fresh install with no XDG_RUNTIME_DIR yet).
+  # Silent if no manager is up (fresh install, no XDG_RUNTIME_DIR yet);
+  # the next login will load the unit.
   if [[ -d "/run/user/$(id -u "${target_user}")" ]]; then
     sudo -u "${target_user}" \
       XDG_RUNTIME_DIR="/run/user/$(id -u "${target_user}")" \

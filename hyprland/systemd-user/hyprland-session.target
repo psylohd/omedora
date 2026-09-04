@@ -1,0 +1,22 @@
+# hyprland-session.target — glue unit that pulls graphical-session.target
+# into the user's user-manager session. dms.service's `Requisite=` line
+# refuses to start dms until graphical-session.target is active, and
+# the bare Hyprland+greetd session manager never activates that target
+# on its own. So we ship this target, which is `BindsTo=` the right
+# target and is then `start`-ed from hyprland.lua (one line in
+# hyprland.lua does the binding).
+#
+# Reference: https://wiki.hypr.land/Useful-Utilities/Systemd-Integration
+# (the "Services / dms.service" section explicitly documents this
+# pattern for dms.service + any service that Wants=graphical-session).
+#
+# We'd hand-write this manually if we didn't ship it; but the bare
+# Hyprland install doesn't generate one. So we deploy with omedora.
+# This file lives in `hyprland/systemd-user/` in the repo and is dropped
+# into ~/.config/systemd/user/ by stage-configs.sh.
+[Unit]
+Description=Hyprland Session Target
+BindsTo=graphical-session.target
+Before=graphical-session.target
+Wants=graphical-session-pre.target
+After=graphical-session-pre.target

@@ -32,6 +32,10 @@ stage_configs() {
   if [[ "${OMEDORA_STAGE_HYPRLAND}" == "true" ]]; then
     section "configs: hyprland"
     stage_config_hyprland "${user_home}"
+    # Drop user-systemd units (hyprland-session.target) alongside the
+    # main hyprland config; ships once per hyprland stage because the
+    # target unit is keyed off `BindsTo=graphical-session.target`.
+    stage_config_systemd_user "${user_home}"
   fi
 
   if [[ "${OMEDORA_STAGE_QUICKSHELL}" == "true" ]]; then
@@ -173,6 +177,49 @@ stage_config_quickshell() {
   backup_and_copy_tree "${src}" "${home}/.config/quickshell"
   chown -R "${OMEDORA_TARGET_USER}:${OMEDORA_TARGET_USER}" "${home}/.config/quickshell"
   chown "${OMEDORA_TARGET_USER}:${OMEDORA_TARGET_USER}" "${home}/.config"
+}
+
+stage_config_systemd_user() {
+  # Drop `hyprland/systemd-user/*.target` / `*.service` files into
+  # `~/.config/systemd/user/` and reload the running user manager so it
+  # sees them. Used for `hyprland-session.target`, the glue unit that
+  # `BindsTo=` graphical-session.target — without it, anything with
+  # `Requisite=graphical-session.target` (e.g. dms.service) never has
+  # its requirement satisfied on a bare Hyprland+greetd install.
+  # Hyprland's `hyprland.lua` calls `systemctl --user start
+  # hyprland-session.target` on each session start; that target's
+  # `BindsTo=` activates graphical-session.target live, and
+  # dms.service's `WantedBy=graphical-session.target` then auto-fires.
+  # Pattern documented at wiki.hypr.land/Useful-Utilities/Systemd-Integration
+  # under "Services / dms.service". We deliberately do NOT
+  # `systemctl --user enable` anything from here — the target is
+  # started per-session from hyprland.lua, not via `[Install] WantedBy=`.
+  local home="$1"
+  local src="${OMEDORA_PATH_HYPRLAND}/systemd-user"
+
+  [[ -d "${src}" ]] || { info "no ${src} (skipping user systemd units)"; return 0; }
+
+  local dst="${home}/.config/systemd/user"
+  install -d -o "${OMEDORA_TARGET_USER}" -g "${OMEDORA_TARGET_USER}" -m 0755 "${dst}"
+
+  local f name
+  for f in "${src}"/*; do
+    [[ -f "${f}" ]] || continue
+    name="$(basename "${f}")"
+    backup_and_install "${f}" "${dst}/${name}"
+    chown "${OMEDORA_TARGET_USER}:${OMEDORA_TARGET_USER}" "${dst}/${name}"
+  done
+
+  # Reload the running user manager so it picks up the new unit
+  # immediately. Silent if no manager is up yet (fresh install with no
+  # XDG_RUNTIME_DIR); the next login will load the unit.
+  if [[ -d "/run/user/$(id -u "${OMEDORA_TARGET_USER}")" ]]; then
+    sudo -u "${OMEDORA_TARGET_USER}" \
+      XDG_RUNTIME_DIR="/run/user/$(id -u "${OMEDORA_TARGET_USER}")" \
+      systemctl --user daemon-reload 2>/dev/null \
+      || warn "user manager daemon-reload failed (will pick up on next login)"
+    info "user manager reloaded; user systemd units active"
+  fi
 }
 
 # ── helpers ───────────────────────────────────────────────────────────────────
