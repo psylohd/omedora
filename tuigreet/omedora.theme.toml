@@ -42,16 +42,6 @@ fps = 30
 path = "/etc/tuigreet/brand.txt"
 align = "center"
 
-[background.aurora]
-coverage = 0.60
-speed = 1.0
-
-[background.constellation]
-star_color = "#CCCCFF"
-edge_color = "#88AAFF"
-dim_color = "#333355"
-speed = 1.0
-
 [background.fog]
 speed = 1.0
 scale = 1.0

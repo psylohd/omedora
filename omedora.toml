@@ -163,8 +163,17 @@ required = [
 # Official Fedora unless marked.
 required = [
   # Files / viewing
+  "krita",
+  "libreoffice",
+  "showtime",
   "nautilus",                       # GNOME Files
   "gnome-disk-utility",             # GNOME Disks
+  "gnome-calculator",
+  "gnome-contacts",
+  "gnome-software",
+  "gnome-papers",
+  "snapshot",
+  "simple-scan",
   "loupe",                          # GNOME image viewer
   "gnome-text-editor",              # GNOME Text Editor
   # Editors
@@ -232,9 +241,9 @@ required = [
 # branch defaults to "master" — change if the fork uses a different base.
 [vendored.tuigreet]
 repo_url = "https://github.com/psylohd/tuigreet.git"
-branch   = "master"
+branch   = "tweak"
 commit   = ""        # optional: pin to a specific commit hash
-
+ 
 # ── Vendored .repo files ──────────────────────────────────────────────────────
 # Used when an upstream project doesn't host a `.repo` file at a stable URL
 # (so `dnf5 config-manager addrepo --from-repofile` can't fetch them) and we
@@ -299,10 +308,6 @@ user = [
 # required, no external tooling). XPIs are fetched and injected inside the
 # sandbox — the host never sees the raw XPI.
 #
-# Example entries:
-#   "https://addons.mozilla.org/firefox/downloads/latest/noscript/latest.xpi"
-#   "https://addons.mozilla.org/firefox/downloads/latest/bitwarden-password-manager/latest.xpi"
-#   "https://addons.mozilla.org/firefox/downloads/latest/ublock-origin/latest.xpi"
 extensions = [
   "https://addons.mozilla.org/firefox/downloads/latest/noscript/latest.xpi",
   "https://addons.mozilla.org/firefox/downloads/latest/bitwarden-password-manager/latest.xpi",

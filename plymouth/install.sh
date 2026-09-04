@@ -24,11 +24,18 @@ if ! ls /usr/lib64/plymouth/script.so &>/dev/null; then
   exit 1
 fi
 
-# Install theme files
-mkdir -p "$THEME_DIR"
+# Copy theme files into place
+install -m 644 \
+    "$SOURCE_DIR/omedora.plymouth" \
+    "$SOURCE_DIR/omedora.script" \
+    "$SOURCE_DIR/logo.png" \
+    "$SOURCE_DIR/lock.png" \
+    "$SOURCE_DIR/entry.png" \
+    "$SOURCE_DIR/bullet.png" \
+    "$SOURCE_DIR/progress_box.png" \
+    "$SOURCE_DIR/progress_bar.png" \
+    "$THEME_DIR/"
 
-# Install plymouthd override (point to our theme)
-install -m 644 "$SOURCE_DIR/plymouthd.conf" /etc/plymouth/plymouthd.conf
 
 # Register theme with Plymouth. Run before dracut so hostonly detection
 # sees the new default and includes the plymouth module in the initramfs.
