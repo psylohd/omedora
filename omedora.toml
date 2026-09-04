@@ -34,18 +34,21 @@ enable = [
   # that COPR ever stops shipping ghostty, re-enable scottames/ghostty
   # AND audit for conflicts with danklinux before re-enabling.
 ]
-# ── Plymouth auto-scaling ────────────────────────────────────────────────────────
-# Plymouth's script.so exposes neither `Window.GetMaxWidthScale()`
-# nor any per-output enumeration API. The omedora script instead
-# derives a `scaling_factor` from the framebuffer width (see the
-# top of plymouth/omedora.script). Override that heuristic with an
-# explicit DeviceScale written into /etc/plymouth/plymouthd.conf by
-# the install. Common values:
-#   1 — single 1080p monitor, 2x DPI laptop internal display, etc.
-#   2 — 4K-class monitors, dual 1920+1920 setups Plymouth spans
-#       as one wide framebuffer.
-#   3 — 5K-class displays.
-# Set device_scale = 0 to keep the script's auto-derive (default).
+# Plymouth DeviceScale
+# Plymouth's script.so plugin exposes only Window.GetWidth/Height
+# (the total framebuffer size) - no per-output enumeration API. All
+# standard splashes, including Omarchy's, center on the framebuffer
+# midpoint with `Window.GetWidth() / 2`. On most hardware that IS the
+# only visible monitor at boot (the kernel/EFI haven't initialized
+# multi-monitor KMS yet) and the splash sits dead-center. For hardware
+# where the firmware hands Plymouth a stitched multi-head framebuffer,
+# DeviceScale > 1 divides the reported width inside plymouthd BEFORE
+# it reaches the script, recovering single-monitor semantics:
+#   1 - single 1920-wide monitor (the Omarchy default)
+#   2 - 3840-wide stitched framebuffer = two 1920 monitors
+#   3 - 5K-class 5120-wide stitched
+# device_scale = 0 keeps the system default (no entry written), which
+# in practice equals 1 on the hardware Plymouth actually runs against.
 [plymouth]
 device_scale = 0
 
