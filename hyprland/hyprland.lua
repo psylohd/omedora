@@ -41,18 +41,19 @@ end
 hl.on("hyprland.start", function()
 	hl.exec_cmd("dbus-update-activation-environment --systemd --all")
 	hl.exec_cmd("systemctl --user start hyprland-session.target")
-	-- dms.service is started automatically via the
-	-- default.target.wants/dms.service symlink installed by
-	-- stage-dms.sh. Once hyprland-session.target is active (line
-	-- above), the symlink + the unit's `WantedBy=graphical-session
-	-- .target` cause dms.service to autostart.
-	--
-	-- We deliberately do NOT call `systemctl --user start dms.service`
-	-- here. Doing so races the systemd user manager's Wants=graphical
-	-- -session.target evaluation and occasionally launches dms twice
-	-- (once from the explicit start, once from the Wants= edge),
-	-- which breaks IPC and produces flaky keybinds because binds.lua
-	-- gets loaded twice with different timing.
+	-- dms.service: the user manager evaluates Wants/Requisite at
+	-- evaluation time, not continuously. `hyprland-session.target`'s
+	-- BindsTo activates graphical-session.target AFTER dms.service's
+	-- first eval (the user manager is racing Hyprland's init hook).
+	-- Without this explicit start, dms.service ends up
+	-- `inactive (dead)` with `result 'dependency'` on the first
+	-- login after a fresh install — the symlink plus the BindsTo=
+	-- chain eventually fires, but systemd caches the first failed
+	-- evaluation and does not retry.
+	-- Idempotent on subsequent logins: `start` on an already-active
+	-- unit is a no-op, so this doesn't cause the dms double-launch
+	-- the explicit start was once thought to risk.
+	hl.exec_cmd("systemctl --user start dms.service")
 	require("startup")  -- sets exec_once list (polkit, easyeffects, wl-clip-persist, ...)
 end)
 -- Inputs (keyboard, mouse, touchpad, gestures) live in inputs.lua.
