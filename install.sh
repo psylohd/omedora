@@ -51,7 +51,7 @@ Options:
 
 Stages (toggleable in omedora.toml [stages]):
   copr, dnf, vendor, flatpak, plymouth, tuigreet, hyprland,
-  quickshell, greetd, dms, keyring, userdirs, services
+  quickshell, greetd, dms, keyring, userdirs, services, hyprland-plugins
 (configs = plymouth + tuigreet + hyprland + quickshell in one pass;
  plymouth/tuigreet/hyprland/quickshell are also accepted as aliases for configs)
 
@@ -75,7 +75,7 @@ done
 source "${SCRIPT_DIR}/lib/parser.sh"
 source "${SCRIPT_DIR}/lib/self-check.sh"
 # Source stage functions so `run_stage <name> <fn>` can dispatch to them.
-for _stage in copr dnf vendor flatpak configs greetd dms keyring userdirs services; do
+for _stage in copr dnf vendor flatpak configs greetd dms keyring userdirs services hyprland-plugins; do
   source "${SCRIPT_DIR}/lib/stage-${_stage}.sh"
 done
 
@@ -97,8 +97,8 @@ apply_stage_filter() {
   # 'configs' stage (which runs all four in one pass). The iteration list
   # below contains both names so users can pass either via --only.
   if [[ -n "${ONLY}" ]]; then
-    for s in copr dnf vendor flatpak plymouth tuigreet hyprland quickshell configs greetd dms keyring userdirs services; do
-      printf -v "OMEDORA_STAGE_${s^^}" "false"
+    for s in copr dnf vendor flatpak plymouth tuigreet hyprland quickshell configs greetd dms keyring userdirs services hyprland-plugins; do
+      printf -v "$(stage_flag_name "${s}")" "false"
     done
     IFS=',' read -ra list <<< "${ONLY}"
     for s in "${list[@]}"; do
@@ -126,8 +126,12 @@ apply_stage_filter() {
           printf -v "OMEDORA_STAGE_DNF" "true"
           printf -v "OMEDORA_STAGE_VENDOR" "true"
           printf -v "OMEDORA_STAGE_DMS" "true" ;;
+        hyprland-plugins)
+          # Pure-Lua Hyprland plugins (cloned to ~/.config/hypr/plugins/).
+          printf -v "OMEDORA_STAGE_HYPRLAND_PLUGINS" "true" ;;
         *)
-          local var="OMEDORA_STAGE_${s^^}"
+          local var
+          var="$(stage_flag_name "${s}")"
           printf -v "${var}" "true" ;;
       esac
     done
@@ -136,7 +140,7 @@ apply_stage_filter() {
 if [[ -n "${SKIP}" ]]; then
   IFS=',' read -ra list <<< "${SKIP}"
   for s in "${list[@]}"; do
-    var="OMEDORA_STAGE_${s^^}"
+    var="$(stage_flag_name "${s}")"
     printf -v "${var}" "false"
   done
 fi
@@ -161,12 +165,9 @@ echo "  target user: ${OMEDORA_TARGET_USER}"
 echo "  greeter:     ${OMEDORA_GREETER_BACKEND}"
 echo "  repo root:   ${OMEDORA_REPO_ROOT}"
 echo "  config:      ${OMEDORA_CONFIG}"
-echo
-echo "  stages:"
-for s in copr dnf vendor flatpak plymouth tuigreet hyprland quickshell greetd dms keyring userdirs services; do
-  f="OMEDORA_STAGE_${s^^}"
+for s in copr dnf vendor flatpak plymouth tuigreet hyprland quickshell greetd dms keyring userdirs services hyprland-plugins; do
+  f="$(stage_flag_name "${s}")"
   v="${!f:-false}"
-  # configs is the parent of the sub-stages; show it too.
   if [[ "${s}" == "plymouth" ]] || [[ "${s}" == "tuigreet" ]] || \
      [[ "${s}" == "hyprland" ]] || [[ "${s}" == "quickshell" ]]; then
     [[ "${v}" == "true" ]] && parent="(via configs)" || parent=""
@@ -190,12 +191,11 @@ run_stage flatpak    stage_flatpak
 run_stage greetd     stage_greetd       # wire /etc/greetd/config.toml + start-hyprland
 run_stage configs    stage_configs      # plymouth + tuigreet + hyprland + quickshell in one pass
 run_stage dms        stage_dms          # DankMaterialShell config + plugins
+run_stage hyprland-plugins stage_hyprland_plugins  # clone Lua plugins to ~/.config/hypr/plugins/
 run_stage keyring    stage_keyring      # GNOME keyring auto-unlock at greetd login
 run_stage userdirs   stage_user_dirs    # default XDG dirs + custom dev/projects/programs
 run_stage services   stage_services
-
 # ── Done ──────────────────────────────────────────────────────────────────────
-section "complete"
 cat <<DONE
 
 Next steps:

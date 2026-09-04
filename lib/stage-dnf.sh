@@ -27,7 +27,14 @@ build_copr_setopt_flags() {
 
 stage_dnf() {
   section "dnf"
-  command -v dnf5 >/dev/null 2>&1 || die "dnf5 not found"
+
+  # Add external repos (e.g. Docker CE from docker-ce.repo).
+  # Each URL is fetched and registered with dnf5 config-manager addrepo.
+  for _repo_url in "${OMEDORA_REPOS[@]}"; do
+    info "adding repo: ${_repo_url}"
+    dnf5 -y config-manager addrepo --from-repofile "${_repo_url}" \
+      || warn "failed to add repo ${_repo_url} (continuing)"
+  done
 
   # Snapshot the COPR setopt flags once — every install below appends them.
   local copr_flags=()
@@ -71,6 +78,13 @@ stage_dnf() {
     dnf5 -y install "${copr_flags[@]}" "${OMEDORA_APPS_OPTIONAL[@]}" || {
       warn "optional package install failed — continuing. (Re-run after fixing.)"
     }
+  fi
+  # Packages from external repos (e.g. Docker CE from [repos]).
+  # COPR flags are intentionally omitted — these repos are not COPRs.
+  info "installing external-repo packages (${#OMEDORA_DOCKER[@]} packages)"
+  if [[ ${#OMEDORA_DOCKER[@]} -gt 0 ]]; then
+    dnf5 -y install "${OMEDORA_DOCKER[@]}" \
+      || die "external-repo packages install failed"
   fi
 
   # Plymouth hard dep: the omedora script theme requires plymouth-plugin-script.

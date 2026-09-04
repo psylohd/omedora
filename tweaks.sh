@@ -47,6 +47,8 @@ declare -A TWEAK_FN=(
   [keyring]=tweak_keyring
   [userdirs]=tweak_userdirs
   [services]=tweak_services
+  [flatpak]=tweak_flatpak
+  [hyprland-plugins]=tweak_hyprland_plugins
 )
 declare -A TWEAK_DESC=(
   [plymouth]="Plymouth omedora theme (script module)"
@@ -58,6 +60,8 @@ declare -A TWEAK_DESC=(
   [keyring]="Wire pam_gnome_keyring in PAM + ensure autostart entry"
   [userdirs]="xdg-user-dirs-update --force + write ~/dev, ~/projects, ~/programs"
   [services]="systemctl enable + set-default graphical.target"
+  [flatpak]="Install Flatpaks from [flatpak] + refresh desktop-database cache"
+  [hyprland-plugins]="Clone Lua plugins to ~/.config/hypr/plugins/"
 )
 
 list_tweaks() {
@@ -79,8 +83,8 @@ source "${SCRIPT_DIR}/lib/stage-vendor.sh"
 source "${SCRIPT_DIR}/lib/stage-configs.sh"
 source "${SCRIPT_DIR}/lib/stage-userdirs.sh"
 source "${SCRIPT_DIR}/lib/stage-services.sh"
-source "${SCRIPT_DIR}/lib/stage-flatpak.sh"
 source "${SCRIPT_DIR}/lib/stage-keyring.sh"
+source "${SCRIPT_DIR}/lib/stage-hyprland-plugins.sh"
 source "${SCRIPT_DIR}/lib/detect-monitors.sh"
 
 tweak_plymouth()   { section "tweak: plymouth";   stage_config_plymouth; }
@@ -105,8 +109,9 @@ tweak_dms() {
   # block reclaims ownership + removes any stale dms.service artifacts.
 }
 tweak_keyring()    { section "tweak: keyring";    stage_keyring; }
-tweak_userdirs()   { section "tweak: userdirs";   stage_user_dirs; }
 tweak_services()   { section "tweak: services";   stage_services; }
+tweak_flatpak()    { section "tweak: flatpak";    stage_flatpak; }
+tweak_hyprland_plugins() { section "tweak: hyprland-plugins"; stage_hyprland_plugins; }
 
 # ── --diff: preview what the tweak would do (no writes) ──────────────────────
 # Currently a stub: each stage would need to support --dry-run. Today this
@@ -130,10 +135,11 @@ tweak_diff() {
       echo "  ~${OMEDORA_TARGET_USER}/.config/quickshell/" ;;
     dms)
       echo "  ~${OMEDORA_TARGET_USER}/.config/DankMaterialShell/" ;;
+    hyprland-plugins)
+      echo "  ~${OMEDORA_TARGET_USER}/.config/hypr/plugins/ (git clones; pinned via [hyprland_plugins])" ;;
     services)
       echo "  systemctl enable greetd plymouth-start"
       echo "  systemctl set-default graphical.target" ;;
-    *) die "unknown tweak: ${name}" ;;
   esac
   echo "Existing files would be backed up with timestamped .bak suffixes."
 }
@@ -155,6 +161,11 @@ tweak_revert() {
     dms)
       local h; h="$(getent passwd "${OMEDORA_TARGET_USER}" | cut -d: -f6)"
       paths=("${h}/.config/DankMaterialShell") ;;
+    hyprland-plugins)
+      # Plugins are git clones; revert = drop the local repo and let the
+      # next stage run re-clone from the URL. No .bak files to restore.
+      local h; h="$(getent passwd "${OMEDORA_TARGET_USER}" | cut -d: -f6)"
+      paths=("${h}/.config/hypr/plugins") ;;
     services)
       warn "--revert doesn't apply to services (use systemctl disable + set-default)" ; return 0 ;;
     *) die "unknown tweak: ${name}" ;;

@@ -38,9 +38,26 @@ local nvidia_exec_once_optional = {
     "systemctl --user import-environment WAYLAND_DISPLAY XDG_CURRENT_DESKTOP",
 }
 
--- Optional NVIDIA-specific tweaks. Keep false unless you explicitly want them.
-local enable_nvidia_optional = false
-
+-- Optional NVIDIA-specific tweaks. Auto-detected: if any NVIDIA PCI
+-- device is present (vendor ID 10de), the optional env+exec_once
+-- blocks below are enabled automatically. The auto-detect runs once
+-- at config-load via `lspci -d 10de::0300` (NVIDIA display class).
+-- The check is non-fatal: if lspci is missing the env falls back to
+-- the false branch, no error.
+--
+-- Override: set OMEDORA_DISABLE_NVIDIA_AUTODETECT=1 in the Hyprland
+-- process environment to force the false branch.
+local function has_nvidia_gpu()
+    if os.getenv("OMEDORA_DISABLE_NVIDIA_AUTODETECT") == "1" then
+        return false
+    end
+    local handle = io.popen("lspci -d 10de::0300 -n 2>/dev/null")
+    if not handle then return false end
+    local out = handle:read("*a") or ""
+    handle:close()
+    return out:match("10de") ~= nil
+end
+local enable_nvidia_optional = has_nvidia_gpu()
 for _, item in ipairs(env) do
     local key, value = item:match("^([^,]+),(.+)$")
     if key and value then

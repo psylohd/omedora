@@ -14,6 +14,17 @@ stage_services() {
     return 0
   fi
 
+  # Add docker group and add target user to it.
+  if ! getent group docker >/dev/null 2>&1; then
+    info "creating docker group"
+    groupadd docker || warn "groupadd docker failed (continuing)"
+  fi
+  if [[ -n "${OMEDORA_TARGET_USER}" ]]; then
+    info "adding ${OMEDORA_TARGET_USER} to docker group"
+    usermod -aG docker "${OMEDORA_TARGET_USER}" \
+      || warn "usermod -aG docker ${OMEDORA_TARGET_USER} failed (continuing)"
+  fi
+
   for svc in "${OMEDORA_SERVICES_ENABLE[@]}"; do
     info "enabling ${svc}"
     systemctl enable "${svc}" || warn "failed to enable ${svc} (continuing)"

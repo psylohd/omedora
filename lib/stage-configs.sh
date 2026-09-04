@@ -1,10 +1,11 @@
 # lib/stage-configs.sh — drop the repo's config trees into the right places.
 #
-# Three destinations:
+# Destinations:
 #   /usr/share/plymouth/themes/omedora      — Plymouth theme (system)
 #   /etc/tuigreet  + /usr/local/bin/tuigreet — tuigreet binary + config (system)
 #   $HOME/.config/hypr                     — Hyprland user config
 #   $HOME/.config/quickshell               — quickshell/dms user config
+#   $HOME/.config/nvim                     — Neovim / LazyVim user config
 #
 # Every existing target file is backed up with a timestamped .bak suffix,
 # matching the convention in install.sh. This makes the installer safely
@@ -41,6 +42,11 @@ stage_configs() {
   if [[ "${OMEDORA_STAGE_QUICKSHELL}" == "true" ]]; then
     section "configs: quickshell"
     stage_config_quickshell "${user_home}"
+  fi
+
+  if [[ "${OMEDORA_STAGE_NVIM}" == "true" ]]; then
+    section "configs: neovim"
+    stage_config_neovim "${user_home}"
   fi
 }
 
@@ -102,62 +108,62 @@ stage_config_tuigreet() {
   # Skip build if vendor stage already installed the binary (avoids double-build
   # when --only tuigreet is used, which enables both vendor + tuigreet stages).
   if ! command -v tuigreet >/dev/null 2>&1; then
-  if [[ -n "${OMEDORA_TUIGREET_REPO_URL}" ]]; then
-    # New style: clone from a pinned git URL into a scratch dir, build, clean up.
-    [[ -n "${OMEDORA_TUIGREET_BRANCH}" ]] \
-      || die "[vendored.tuigreet].branch is empty — set to e.g. 'tweak'"
-    command -v git  >/dev/null 2>&1 || die "git not found. dnf5 install git first."
-    command -v cargo >/dev/null 2>&1 || die "cargo not found. Did [packages.build] install fail?"
+    if [[ -n "${OMEDORA_TUIGREET_REPO_URL}" ]]; then
+      # New style: clone from a pinned git URL into a scratch dir, build, clean up.
+      [[ -n "${OMEDORA_TUIGREET_BRANCH}" ]] \
+        || die "[vendored.tuigreet].branch is empty — set to e.g. 'tweak'"
+      command -v git  >/dev/null 2>&1 || die "git not found. dnf5 install git first."
+      command -v cargo >/dev/null 2>&1 || die "cargo not found. Did [packages.build] install fail?"
 
-    cleanup="$(mktemp -d)" || die "mktemp failed"
-    src_src="${cleanup}/tuigreet"
+      cleanup="$(mktemp -d)" || die "mktemp failed"
+      src_src="${cleanup}/tuigreet"
 
-    info "cloning tuigreet (${OMEDORA_TUIGREET_BRANCH})"
-    git clone --depth=1 --branch "${OMEDORA_TUIGREET_BRANCH}" \
-      "${OMEDORA_TUIGREET_REPO_URL}" "${src_src}" \
-      || die "git clone failed: ${OMEDORA_TUIGREET_REPO_URL}"
+      info "cloning tuigreet (${OMEDORA_TUIGREET_BRANCH})"
+      git clone --depth=1 --branch "${OMEDORA_TUIGREET_BRANCH}" \
+        "${OMEDORA_TUIGREET_REPO_URL}" "${src_src}" \
+        || die "git clone failed: ${OMEDORA_TUIGREET_REPO_URL}"
 
-    if [[ -n "${OMEDORA_TUIGREET_COMMIT}" ]]; then
-      info "checking out pinned commit ${OMEDORA_TUIGREET_COMMIT}"
-      ( cd "${src_src}" && git fetch --unshallow \
-        && git checkout "${OMEDORA_TUIGREET_COMMIT}" ) \
-        || die "git checkout failed"
-    fi
-  else
-    # Legacy style: a pre-cloned Cargo workspace already in the repo
-    # (OMEDORA_PATH_TUIGREET_SRC). Honour it if it has a Cargo.toml.
-    local legacy_src="${OMEDORA_PATH_TUIGREET_SRC:-}"
-    if [[ -z "${legacy_src}" || ! -f "${legacy_src}/Cargo.toml" ]]; then
-      die "[vendored.tuigreet].repo_url is empty and [paths.repo].tuigreet_src
+      if [[ -n "${OMEDORA_TUIGREET_COMMIT}" ]]; then
+        info "checking out pinned commit ${OMEDORA_TUIGREET_COMMIT}"
+        ( cd "${src_src}" && git fetch --unshallow \
+          && git checkout "${OMEDORA_TUIGREET_COMMIT}" ) \
+          || die "git checkout failed"
+      fi
+    else
+      # Legacy style: a pre-cloned Cargo workspace already in the repo
+      # (OMEDORA_PATH_TUIGREET_SRC). Honour it if it has a Cargo.toml.
+      local legacy_src="${OMEDORA_PATH_TUIGREET_SRC:-}"
+      if [[ -z "${legacy_src}" || ! -f "${legacy_src}/Cargo.toml" ]]; then
+        die "[vendored.tuigreet].repo_url is empty and [paths.repo].tuigreet_src
 points to a non-Cargo directory. Either:
   1. Set [vendored.tuigreet].repo_url + branch (recommended), or
   2. Set [paths.repo].tuigreet_src to a directory containing Cargo.toml"
+      fi
+      warn "using legacy tuigreet_src path: ${legacy_src}"
+      src_src="$(dirname "${legacy_src}")"
     fi
-    warn "using legacy tuigreet_src path: ${legacy_src}"
-    src_src="$(dirname "${legacy_src}")"
-  fi
 
-  # ── 2. Build ───────────────────────────────────────────────────────────────
-  # Register cleanup for the clone-scratch path. The trap handler runs
-  # at function exit, after the local var has gone out of scope — so we
-  # promote the path to the environment (so the trap can still see it)
-  # and give the trap's expansion an explicit default.
-  if [[ -n "${cleanup}" ]]; then
-    export OMEDORA_TUIGREET_CLEANUP="${cleanup}"
-    trap 'rm -rf "${OMEDORA_TUIGREET_CLEANUP:-}"' RETURN
-  fi
+    # ── 2. Build ───────────────────────────────────────────────────────────────
+    # Register cleanup for the clone-scratch path. The trap handler runs
+    # at function exit, after the local var has gone out of scope — so we
+    # promote the path to the environment (so the trap can still see it)
+    # and give the trap's expansion an explicit default.
+    if [[ -n "${cleanup}" ]]; then
+      export OMEDORA_TUIGREET_CLEANUP="${cleanup}"
+      trap 'rm -rf "${OMEDORA_TUIGREET_CLEANUP:-}"' RETURN
+    fi
 
-  [[ -n "${src_src}" && -f "${src_src}/Cargo.toml" ]] \
-    || die "tuigreet Cargo.toml not found in '${src_src}'"
+    [[ -n "${src_src}" && -f "${src_src}/Cargo.toml" ]] \
+      || die "tuigreet Cargo.toml not found in '${src_src}'"
 
-  info "building tuigreet (cargo --release)"
-  ( cd "${src_src}" && cargo build --release -p tuigreet ) \
-    || die "tuigreet build failed"
+    info "building tuigreet (cargo --release)"
+    ( cd "${src_src}" && cargo build --release -p tuigreet ) \
+      || die "tuigreet build failed"
 
-  local bin="${src_src}/target/release/tuigreet"
-  [[ -x "${bin}" ]] || die "tuigreet binary missing after build: ${bin}"
+    local bin="${src_src}/target/release/tuigreet"
+    [[ -x "${bin}" ]] || die "tuigreet binary missing after build: ${bin}"
 
-  install -m 0755 "${bin}" /usr/local/bin/tuigreet
+    install -m 0755 "${bin}" /usr/local/bin/tuigreet
   fi
 
 
@@ -174,6 +180,7 @@ points to a non-Cargo directory. Either:
   fi
   chmod 0755 /var/cache/tuigreet
 }
+
 stage_config_hyprland() {
   local home="$1"
   local src="${OMEDORA_PATH_HYPRLAND}"
@@ -206,12 +213,29 @@ stage_config_hyprland() {
 }
 
 stage_config_quickshell() {
+  local home="$1"
   local src="${OMEDORA_PATH_QUICKSHELL}"
 
   [[ -d "${src}" ]] || { warn "quickshell config dir not found: ${src} (skipping)"; return 0; }
 
   backup_and_copy_tree "${src}" "${home}/.config/quickshell"
   chown -R "${OMEDORA_TARGET_USER}:${OMEDORA_TARGET_USER}" "${home}/.config/quickshell"
+  chown "${OMEDORA_TARGET_USER}:${OMEDORA_TARGET_USER}" "${home}/.config"
+}
+
+stage_config_neovim() {
+  local home="$1"
+  local src="${OMEDORA_PATH_NVIM}"
+  local dst="${home}/.config/nvim"
+
+  if [[ -z "${src}" || "${src}" == "" ]]; then
+    info "no nvim config path configured (set [paths.repo].nvim in omedora.toml)"
+    return 0
+  fi
+  [[ -d "${src}" ]] || { warn "nvim config dir not found: ${src} (skipping)"; return 0; }
+
+  backup_and_copy_tree "${src}" "${dst}"
+  chown -R "${OMEDORA_TARGET_USER}:${OMEDORA_TARGET_USER}" "${dst}"
   chown "${OMEDORA_TARGET_USER}:${OMEDORA_TARGET_USER}" "${home}/.config"
 }
 

@@ -89,6 +89,14 @@ hl.config({
 		gaps_in = 5,
 		gaps_out = 5,
 		border_size = 2,
+		-- Click-and-drag on window borders / gaps to resize. Pairs
+		-- with SUPER + mouse:272 → window.drag() in dms/binds-user.lua
+		-- for rearranging tiled windows (drag-and-move within the
+		-- layout, not float-and-move). Without this flag, the
+		-- border is purely visual and only SUPER+Q (close) /
+		-- SUPER+F (fullscreen) / SUPER+T (float toggle) are usable
+		-- from the mouse — everything else needs the keyboard.
+		resize_on_border = true,
 	},
 	decoration = {
 		rounding = 12,
@@ -106,11 +114,18 @@ hl.config({
 		disable_hyprland_logo = true,
 		disable_splash_rendering = true,
 	},
-	dwindle = {
-		preserve_split = true,
-	},
 	master = {
 		mfact = 0.5,
+	},
+	-- binds: see https://wiki.hypr.land/configuring/core/binds/.
+	-- drag_threshold is the cursor-movement (in px) required before
+	-- a SUPER + mouse:272 press is treated as a drag rather than a
+	-- click. 0 = treat every press as drag immediately; a small value
+	-- (~10) lets a plain click on a tiled window still focus it
+	-- without inadvertently dragging it across the layout. Hyprland's
+	-- default is 0; we set 10 to make "click to focus" reliable.
+	binds = {
+		drag_threshold = 10,
 	},
 })
 -- Scaling note: Hyprland sets per-monitor scale via `monitor=NAME,
@@ -185,13 +200,63 @@ hl.layer_rule({ match = { namespace = "^dms:.*" }, no_anim = true })
 -- gestures via hl.gesture(); it's required unconditionally so gestures
 -- are active on the very first boot.
 local function safe_require(mod)
-	local ok, err = pcall(require, mod)
+	local ok, result = pcall(require, mod)
 	if not ok then
 		-- Will be picked up on the next hyprctl reload, once dms has
 		-- written the file from its first-launch theme/monitor logic.
-		print(string.format("[hyprland] deferring require(\"%s\"): %s", mod, err))
+		print(string.format("[hyprland] deferring require(\"%s\"): %s", mod, result))
+		return nil
 	end
+	return result
 end
+-- ── Lua plugins ──────────────────────────────────────────────────────────────
+-- Third-party Hyprland "plugins" that ship as plain Lua packages (no C++
+-- compilation, no hyprpm) live under ~/.config/hypr/plugins/<name>/ and
+-- are loaded here. The lib/stage-hyprland-plugins.sh stage clones each
+-- [hyprland_plugins].plugins entry into that directory at install time;
+-- this file is responsible for requiring + configuring them.
+--
+-- If the plugin dir is missing (e.g. user applied tweaks.sh hyprland
+-- before ever running install.sh / the hyprland-plugins stage), fall
+-- back to a no-op stub so Hyprland doesn't trip emergency mode. The
+-- user runs install.sh (or tweaks.sh hyprland-plugins) to clone the
+-- plugin and `hyprctl reload`.
+-- Derive this file's directory so package.path is independent of Hyprland's
+-- CWD. The `S` field of debug.getinfo(1, "S").source is the @-prefixed
+-- absolute path of the currently-running chunk; strip the @ and the
+-- basename to get the dir hyprland.lua lives in (typically
+-- ~/.config/hypr/). require("plugins.foo") then resolves to that dir's
+-- plugins/foo/init.lua without relying on a particular working directory.
+local script_path = (debug.getinfo(1, "S").source:sub(2))
+local config_dir  = script_path:match("(.+)/[^/]+$") or "."
+package.path = config_dir .. "/?.lua;" .. config_dir .. "/?/init.lua;" .. package.path
+local smw = safe_require("plugins.split-monitor-workspaces")
+if smw then
+	-- workspace_count = 5 → 5 persistent workspaces per monitor, so
+	-- SUPER+1..5 on each monitor are always reachable (and stay bound
+	-- even when the monitor has no windows yet). To change this, edit
+	-- this number AND smw.get_amount_of_workspaces() will pick it up
+	-- automatically in dms/binds-user.lua's bind loop.
+	smw.setup({ workspace_count = 5 })
+else
+	-- Stub: pretend the plugin has zero workspaces so the bind loop
+	-- in dms/binds-user.lua is a no-op. SUPER+1..N fall through to
+	-- Hyprland's default workspace dispatcher until the user runs
+	-- install.sh (or tweaks.sh hyprland-plugins) to clone the plugin.
+	smw = {
+		setup = function(_) end,
+		get_amount_of_workspaces = function() return 0 end,
+		workspace = function(_) return function() end end,
+		move_to_workspace_silent = function(_) return function() end end,
+	}
+end
+-- DMS-generated files (colors, outputs, layout) are written by dms on
+-- first launch. Until then they don't exist, and requiring them here
+-- would crash Hyprland before exec-once dms run has a chance. Wrap each
+-- dms-generated require in pcall so Hyprland boots cleanly even on a
+-- fresh install where dms hasn't run yet. dms/binds.lua and
+-- dms/binds-user.lua ARE shipped in the repo (binds is the upstream
+-- default, binds-user is our override), so those require normally.
 safe_require("dms.colors")
 safe_require("dms.outputs")
 safe_require("dms.layout")
@@ -199,3 +264,19 @@ safe_require("dms.cursor")
 require("dms.binds")
 require("dms.binds-user")
 require("inputs")  -- keyboard/touchpad config + trackpad gestures
+-- ── Post-dms overrides ───────────────────────────────────────────────────────
+hl.config({
+	general = {
+		-- dms defaults this to false because dms ships its own
+		-- SUPER+RMB → window.resize bind and assumes you'll use
+		-- that. We want click-and-drag on borders / gaps too
+		-- (Hyprland's built-in mouse:resize path), so force it on.
+		resize_on_border = true,
+		-- dms also defaults border_size to 2 (a hairline). On
+		-- HiDPI screens 2 logical px is ~3-4 device px and is
+		-- very hard to click. Bump to 4 so the grab target is
+		-- reliably hit; the border is still thin enough to look
+		-- like a hairline at typical viewing distances.
+		border_size = 4,
+	},
+})

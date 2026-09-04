@@ -39,18 +39,46 @@ hl.config({
         -- the cursor on hover, which is the "auto focus on mouse over"
         -- behavior the user wants OFF.
         follow_mouse = 0,
-        -- Cursor hiding: disable all three Hyprland timers so the cursor
-        -- stays visible at rest. Anything else tends to fight with dms's
-        -- software cursor overlay (which has its own hide policy in
-        -- settings.json:cursorSettings) and produces the per-frame blink.
-        -- The values below match the keys listed under
-        -- https://wiki.hypr.land/Configuring/Variables/#input
-        --   hide_cursor_on_key_press = false  → cursor stays while typing
-        --   hide_on_touch               = false → cursor stays during tap
-        --   cursor_invisible_timeout    = 0     → never auto-hide
-        hide_cursor_on_key_press = false,
+        -- Mouse-refocus off: even with follow_mouse = 0, Hyprland
+        -- will still re-focus the currently focused window when the
+        -- mouse leaves and re-enters it (and on some monitors
+        -- pointer motion wakes the focus). Disabling refocus means
+        -- clicks/keybinds are the ONLY way focus changes — which
+        -- is the "click-to-focus only" behavior the user wants.
+        mouse_refocus = false,
+    },
+    -- Cursor-hiding timers live under the `cursor` section (NOT
+    -- under `input` — these are Hyprland's compositor-side cursor
+    -- hide policies, separate from per-device input). Earlier
+    -- versions of this file set those keys under input, but they
+    -- are not input-level keys and Hyprland rejected them with
+    -- "unknown config key 'input.cursor_invisible_timeout' /
+    -- 'input.hide_cursor_on_key_press'" at config-load time.
+    -- Correct keys per https://wiki.hypr.land/configuring/core/
+    -- config-options/#cursor:
+    --   hide_on_key_press  (bool) — hide cursor while typing
+    --   hide_on_touch      (bool) — hide cursor while a touch is active
+    --   inactive_timeout   (int)  — seconds of cursor inactivity
+    --                               before hiding. 0 = never hide.
+    -- Set all three so Hyprland never auto-hides the cursor.
+    cursor = {
+        hide_on_key_press = false,
         hide_on_touch = false,
-        cursor_invisible_timeout = 0,
+        inactive_timeout = 0,
+        -- no_hardware_cursors: forces Hyprland to draw the cursor
+        -- in software (CPU/GPU-rendered, not a hardware plane).
+        --   0 = use hw cursors when possible
+        --   1 = always software
+        --   2 = auto: try hw, fall back to software on tearing
+        --
+        -- The flash symptom is caused by Hyprland on NVIDIA GPUs
+        -- toggling between hw and sw cursor modes every frame,
+        -- because the NVIDIA driver does not reliably expose
+        -- hardware cursor planes via GBM. Forcing sw here is
+        -- essentially free on modern hardware (one extra blit per
+        -- frame) and reliably kills the flash on NVIDIA.
+        -- Non-NVIDIA users see no visual difference.
+        no_hardware_cursors = 1,
     },
 })
 

@@ -7,3 +7,7 @@
 # Hyprland runtime files written under ~/.config/hypr but cloned
 # into this repo's working tree sometimes.
 *.hyprlock.swp
+
+# Stray filesystem extraction output. `rpm2cpio foo.rpm | cpio -id`
+# without an explicit target dir writes here. Never commit this.
+usr/

@@ -16,6 +16,7 @@
 --   5. Window management (SUPER + {Q, W, T, F, V})
 --   6. Layout / display
 --   7. Misc / utility (reload, exit, scratch)
+--   8. Mouse-drag rearrange (SUPER + mouse:272 → window.drag())
 --
 -- Notes:
 --   - hl.bind / hl.unbind / hl.dsp.* are the Hyprland 0.55+ Lua API.
@@ -71,6 +72,10 @@ local conflicts = {
 	"SUPER + Q", "SUPER + W", "SUPER + T", "SUPER + F", "SUPER + V",
 	-- Layout toggle + reload + exit
 	"SUPER + L", "SUPER + SHIFT + L", "SUPER + R", "SUPER + Escape",
+	-- Mouse-button binds: SUPER + LMB drag is rebound in § 8.
+	-- dms upstream does NOT bind this by default, but listing it
+	-- here future-proofs against a future dms release that adds it.
+	"SUPER + mouse:272",
 	-- ALT-space (kept for safety — dms has historically bound this)
 	"ALT + space",
 }
@@ -92,31 +97,24 @@ local apps = {
 for _, entry in ipairs(apps) do
 	hl.bind(entry[1], hl.dsp.exec_cmd(entry[2]), { description = entry[3] })
 end
-
--- ── 3. Workspace focus (SUPER + 1-9, 0 = ws 10) + send window ───────────────
--- Hyprland binds keys by name: digits are "1".."9" and "0", not "10". Loop
--- 1..9 with "0" -> workspace 10 (the canonical Omarchy keymap).
-local focus_workspaces = { "1", "2", "3", "4", "5", "6", "7", "8", "9", "0" }
-local focus_ws_ids     = { "1", "2", "3", "4", "5", "6", "7", "8", "9", "10" }
-for idx, key in ipairs(focus_workspaces) do
-	local ws = focus_ws_ids[idx]
+-- ── 3. Workspace focus (SUPER + 1..5) + send window ─────────────────────────
+-- Workspaces are managed by split-monitor-workspaces (smw), giving
+-- per-monitor independent numbering: SUPER+1 on monitor A goes to A's
+-- ws 1; SUPER+1 on monitor B goes to B's ws 1. Loop bound driven by
+-- smw.get_amount_of_workspaces(), so SUPER+1..N and SUPER+SHIFT+1..N
+-- always match workspace_count in hyprland.lua — change it there, not here.
+local smw = require("plugins.split-monitor-workspaces")
+for i = 1, smw.get_amount_of_workspaces() do
+	local key = tostring(i)
 	hl.bind("SUPER + " .. key,
-		hl.dsp.focus({ workspace = ws }),
-		{ description = "Focus workspace " .. ws }
+		smw.workspace(key),
+		{ description = "Focus workspace " .. key .. " on this monitor" }
 	)
-end
-
--- Send window to workspace N. Same key layout as focus.
-local move_ws_keys = { "1", "2", "3", "4", "5", "6", "7", "8", "9", "0" }
-local move_ws_ids  = { "1", "2", "3", "4", "5", "6", "7", "8", "9", "10" }
-for idx, key in ipairs(move_ws_keys) do
-	local ws = move_ws_ids[idx]
 	hl.bind("SUPER + SHIFT + " .. key,
-		hl.dsp.window.move({ workspace = ws }),
-		{ description = "Move active window to workspace " .. ws }
+		smw.move_to_workspace_silent(key),
+		{ description = "Move active window to workspace " .. key .. " on this monitor" }
 	)
 end
-
 -- ── 4. Directional focus + swap ─────────────────────────────────────────────
 -- Hyprland dispatcher names use "l", "r", "u", "d" for direction swaps
 -- (single-letter) and full words ("left", "right", "up", "down") for focus.
@@ -157,14 +155,24 @@ hl.bind("SUPER + V",
 	hl.dsp.window.float({ action = "toggle" }),
 	{ description = "Toggle floating (V alias)" }
 )
-
 -- ── 6. Layout / display ─────────────────────────────────────────────────────
 hl.bind("SUPER + L",
 	hl.dsp.exec_cmd(scrPath .. "/omarchy-hyprland-workspace-layout-toggle"),
 	{ description = "Toggle dwindle/scrolling layout" }
 )
--- Layout toggle bound to SUPER + L only. The previous SUPER + SHIFT + L
-
+-- Layout toggle bound to SUPER + L only.
+--
+-- ── 8. Mouse-drag rearrange (SUPER + LMB) ───────────────────────────────────
+-- Hyprland's `window.drag()` keeps the window tiled and reflows the
+-- layout around the new position. NOT a float-and-drag. mouse:272
+-- is the xkbcommon keycode for the left mouse button (use `wev` to
+-- enumerate other buttons on your hardware). drag_threshold is set
+-- in hyprland.lua's binds block; with the default there every
+-- press becomes a drag, with our 10 a plain click still focuses.
+hl.bind("SUPER + mouse:272",
+	hl.dsp.window.drag(),
+	{ description = "Drag window within layout (SUPER + LMB)" }
+)
 -- ── 7. Misc / utility ───────────────────────────────────────────────────────
 hl.bind("SUPER + R",
 	hl.dsp.exec_cmd("hyprctl reload"),

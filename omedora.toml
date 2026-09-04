@@ -52,6 +52,22 @@ enable = [
 [plymouth]
 device_scale = 0
 
+# ── External repos (non-COPR) ───────────────────────────────────────────────────
+# Each entry is a URL to a .repo file fetched by dnf5 config-manager addrepo.
+# Docker CE is the only current use; the installer adds the repo then installs
+# the packages listed in [packages.docker].
+[repos]
+enable = [
+  "https://download.docker.com/linux/fedora/docker-ce.repo",
+]
+
+# ── Packages from external repos ────────────────────────────────────────────────
+[packages.docker]
+runtime = [
+  "docker-ce", "docker-ce-cli", "containerd.io",
+  "docker-buildx-plugin", "docker-compose-plugin",
+]
+
 # ── Packages  ──────────────────────────────────────────────────────────────────
 [packages.hyprland]
 # All from lionheartp/Hyprland COPR (must be enabled first).
@@ -122,6 +138,8 @@ required = [
   "gnome-disk-utility",             # GNOME Disks
   "loupe",                          # GNOME image viewer
   "gnome-text-editor",              # GNOME Text Editor
+  # Editors
+  "neovim",                        # Neovim (LazyVim config deployed by stage-configs)
   # Wayland helpers
   "xwayland-satellite",             # rootless Xwayland
   # Login stack
@@ -156,7 +174,15 @@ required = [
   # re-login. On a bare Fedora Server install this isn't pulled in
   # transitively by anything else we install, so we list it here.
   "desktop-file-utils",
-  # Boot splash
+  # pciutils provides `lspci`, which hyprland/startup.lua uses at
+  # config-load time to auto-detect NVIDIA GPUs (vendor 10de) and
+  # enable the NVIDIA-specific WLR_NO_HARDWARE_CURSORS=1 + GBM_BACKEND
+  # =nvidia-drm env vars. Without pciutils the autodetect is a no-op
+  # and on NVIDIA hardware the cursor renders with the broken hw
+  # cursor path (the "cursor flashes" symptom).
+  "pciutils",
+  "plymouth", "plymouth-plugin-script",   # plugin-script is required by omedora theme
+  "papirus-icon-theme", # Icon pack
 ]
 
 optional_copr = [
@@ -204,6 +230,22 @@ plugins = [
 registry = [
   # "dankQuickSearch",   # quickshell UI launcher plugin (NOT the danksearch binary)
 ]
+# ── Hyprland plugins (pure-Lua packages, no compile, no hyprpm) ─────────────
+# Cloned by the hyprland-plugins stage into ~/.config/hypr/plugins/<name>/.
+# Each entry is a git URL. Optional pin via the pipe-delimited form
+# "<url>|<branch>|<commit>" ("|" is not valid in git URLs so the split is
+# unambiguous). To enable a plugin after install, edit ~/.config/hypr/
+# hyprland.lua and uncomment the matching `require("plugins.<name>")`
+# line; then call its setup() and wire binds per the plugin's README.
+#
+# Currently enabled:
+#   split-monitor-workspaces — awesome/dwm-style independent workspace
+#     numbering per monitor (zjeffer/split-monitor-workspaces).
+#     https://github.com/zjeffer/split-monitor-workspaces
+[hyprland_plugins]
+plugins = [
+  "https://github.com/zjeffer/split-monitor-workspaces",
+]
 # ── Config trees ──────────────────────────────────────────────────────────────
 # Drop each tree into target_user's $HOME with timestamped .bak on conflict.
 [paths.repo]
@@ -211,11 +253,8 @@ plymouth   = "plymouth"           # → /usr/share/plymouth/themes/omedora
 tuigreet   = "tuigreet"           # → /etc/tuigreet  + /usr/local/bin/tuigreet
 tuigreet_src = ""                 # legacy: path to a pre-cloned Cargo workspace
 hyprland   = "hyprland"           # → $HOME/.config/hypr
+nvim       = "nvim"            # → $HOME/.config/nvim (LazyVim)
 dms        = "DankMaterialShell"  # → $HOME/.config/DankMaterialShell
-quickshell = "quickshell"         # → $HOME/.config/quickshell (dms wraps this)
-vendored_tuigreet_repo_url = "https://github.com/psylohd/tuigreet.git"
-vendored_tuigreet_branch   = "tweak"
-vendored_tuigreet_commit   = ""
 # ── Greeter
 # backend = "tuigreet"     — current Rust build under [vendored.tuigreet]
 # The exact command + user are hardcoded in lib/stage-greetd.sh so the
@@ -232,6 +271,7 @@ backend = "tuigreet"
 enable = [
   "greetd.service",
   "plymouth-start.service",
+  "docker.service",
 ]
 set_default = "graphical.target"
 
@@ -264,8 +304,8 @@ xdg_programs_dir  = "programs"
  tuigreet  = true
  hyprland  = true
  quickshell = true
- greetd     = true
- dms        = true
- keyring    = true    # Enable pam_gnome_keyring in PAM + start --components=secrets
- userdirs   = true    # xdg-user-dirs-update --force + custom dirs (dev/projects/programs)
- services   = true
+keyring   = true    # Enable pam_gnome_keyring in PAM + start --components=secrets
+userdirs  = true    # xdg-user-dirs-update --force + custom dirs (dev/projects/programs)
+services  = true    # systemctl enable + default target
+hyprland-plugins = true   # clone Lua plugins to ~/.config/hypr/plugins/
+nvim      = true    # Neovim / LazyVim config

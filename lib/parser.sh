@@ -11,13 +11,13 @@
 #   OMEDORA_QUICKSHELL=( list )
 #   OMEDORA_APPS=( list )
 #   OMEDORA_APPS_OPTIONAL=( list )
+#   OMEDORA_DOCKER=( list )
 #   OMEDORA_DMS_WEAK_DEPS
-#   OMEDORA_TARGET_USER
-#   OMEDORA_COPRS=( list )
 #   OMEDORA_PATH_PLYMOUTH, OMEDORA_PATH_TUIGREET, OMEDORA_PATH_TUIGREET_SRC
 #   OMEDORA_PATH_HYPRLAND, OMEDORA_PATH_DMS, OMEDORA_PATH_QUICKSHELL
+#   OMEDORA_PATH_NVIM
 #   OMEDORA_DMS_PLUGINS=( list )
-#   OMEDORA_SERVICES_ENABLE=( list )
+#   OMEDORA_HYPRLAND_PLUGINS=( list )   # git URLs cloned into ~/.config/hypr/plugins/
 
 # `set -u` is intentionally NOT enabled — bash version differences between
 # the build host and other systems cause spurious "unbound variable" errors
@@ -69,8 +69,14 @@ meta = cfg.get("meta", {})
 emit("OMEDORA_TARGET_USER", meta.get("target_user", ""))
 emit("OMEDORA_META_NAME", meta.get("name", "omedora"))
 emit("OMEDORA_META_DESCRIPTION", meta.get("description", ""))
+
+# COPR repos
 coprs = cfg.get("coprs", {}).get("enable", [])
 emit("OMEDORA_COPRS", coprs)
+
+# External repos (non-COPR .repo file URLs, e.g. Docker CE)
+_repos = cfg.get("repos", {}).get("enable", [])
+emit("OMEDORA_REPOS", _repos)
 
 # packages
 pkgs = cfg.get("packages", {})
@@ -80,6 +86,10 @@ emit("OMEDORA_BUILD", pkgs.get("build", {}).get("required", []))
 apps = pkgs.get("apps", {})
 emit("OMEDORA_APPS", apps.get("required", []))
 emit("OMEDORA_APPS_OPTIONAL", apps.get("optional_copr", []))
+
+# Docker packages from [packages.docker]
+_docker_pkgs = cfg.get("packages", {}).get("docker", {}).get("runtime", [])
+emit("OMEDORA_DOCKER", _docker_pkgs)
 
 # dms from COPR (avengemedia/dms + avengemedia/danklinux)
 dms_cfg = cfg.get("packages", {}).get("dms", {})
@@ -108,12 +118,13 @@ def repo_abs(rel):
     return str(p if p.is_absolute() else (pathlib.Path(root) / p))
 
 p = cfg.get("paths", {}).get("repo", {})
-emit("OMEDORA_PATH_PLYMOUTH", repo_abs(p.get("plymouth", "plymouth")))
-emit("OMEDORA_PATH_TUIGREET", repo_abs(p.get("tuigreet", "tuigreet")))
+emit("OMEDORA_PATH_PLYMOUTH",   repo_abs(p.get("plymouth", "plymouth")))
+emit("OMEDORA_PATH_TUIGREET",   repo_abs(p.get("tuigreet", "tuigreet")))
 emit("OMEDORA_PATH_TUIGREET_SRC", repo_abs(p.get("tuigreet_src", "")))
-emit("OMEDORA_PATH_HYPRLAND", repo_abs(p.get("hyprland", "hyprland")))
-emit("OMEDORA_PATH_DMS", repo_abs(p.get("dms", "DankMaterialShell")))
+emit("OMEDORA_PATH_HYPRLAND",   repo_abs(p.get("hyprland", "hyprland")))
+emit("OMEDORA_PATH_DMS",        repo_abs(p.get("dms", "DankMaterialShell")))
 emit("OMEDORA_PATH_QUICKSHELL", repo_abs(p.get("quickshell", "quickshell")))
+emit("OMEDORA_PATH_NVIM",       repo_abs(p.get("nvim", "")))
 
 # [hyprland].monitors — explicit per-monitor `monitor=NAME,WxH@RRR,XxY,SCALE`
 # entries that stage-configs.sh appends to the deployed hyprland.lua.
@@ -127,6 +138,15 @@ emit("OMEDORA_HYPRLAND_MONITORS", hl_cfg.get("monitors", []))
 dp = cfg.get("dms_plugins", {})
 emit("OMEDORA_DMS_PLUGINS", dp.get("plugins", []))
 emit("OMEDORA_DMS_REGISTRY", dp.get("registry", []))
+
+# hyprland plugins — git URLs cloned into ~/.config/hypr/plugins/.
+# Each entry is a git URL; the cloned repo lives at
+# ~/.config/hypr/plugins/<basename>.git-stripped>/ and is `require`'d by
+# hyprland.lua via `package.path = package.path .. ";./?.lua;./?/init.lua"`
+# so a plugin named "foo" is `require("plugins.foo")`. Empty list disables
+# the stage.
+hp = cfg.get("hyprland_plugins", {}).get("plugins", [])
+emit("OMEDORA_HYPRLAND_PLUGINS", hp)
 
 # userdirs — extra dir names appended to ~/.config/user-dirs.dirs
 # (in addition to the eight standard dirs xdg-user-dirs-update writes).
@@ -156,12 +176,15 @@ if gr.get("backend", "") == "tuigreet":
         primary   = "true" if o.get("primary", False) else "false"
         print(f"OMEDORA_GREETER_OUTPUTS+=( 'connector={connector}|enabled={enabled}|primary={primary}' )")
 
+# Stage toggles
 stg = cfg.get("stages", {})
 for k, v in stg.items():
-    emit(f"OMEDORA_STAGE_{k.upper()}", "true" if v else "false")
+    # Hyphens are valid in TOML keys (e.g. "hyprland-plugins") but bash
+    # variable names forbid them; emit uses underscores.
+    safe_k = k.upper().replace("-", "_")
+    emit(f"OMEDORA_STAGE_{safe_k}", "true" if v else "false")
 PY
 )"
-
   # Strip python-side stderr if any leaked (none should).
   [[ -n "$dump" ]] || die "TOML parser returned empty output — invalid config?"
 
@@ -203,9 +226,18 @@ require_root() {
   [[ $EUID -eq 0 ]] || die "this must run as root (sudo ./fedora_install.sh)"
 }
 
+# stage_flag_name <name> — canonical "OMEDORA_STAGE_<NAME>" form for a
+# stage's OMEDORA_* flag. Replaces '-' with '_' before uppercasing
+# because bash var names forbid '-' AND bash's ${var^^} only matches
+# letters (a hyphen is left as-is, so ${var^^//-/_} is a no-op).
+stage_flag_name() {
+  printf 'OMEDORA_STAGE_%s' "${1//-/_}" | tr '[:lower:]' '[:upper:]'
+}
+
 run_stage() {
   local name="$1"; shift
-  local flag="OMEDORA_STAGE_${name^^}"
+  local flag
+  flag="$(stage_flag_name "${name}")"
   local on="${!flag:-true}"
   if [[ "$on" != "true" ]]; then
     info "stage '${name}' disabled in omedora.toml — skipping"
