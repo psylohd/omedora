@@ -1,8 +1,12 @@
 # lib/stage-greetd.sh — write /etc/greetd/config.toml.
 #
 # Two greeter backends supported:
-#   tuigreet      — current Rust build under [vendored.tuigreet]
-#   dms-greeter   — vendored binary (not currently shipped)
+#   tuigreet      — Rust build under [vendored.tuigreet]. Draws onto the
+#                    kernel VT framebuffer directly.
+#   dms-greeter   — avengemedia/danklinux COPR (RPM, 1.6.0+). Wayland
+#                    greeter; runs inside a Hyprland session so greeter and
+#                    post-login session share DRM master, no VT-framebuffer
+#                    cross-monitor mirroring.
 #
 # Both backends exec into `uwsm start /usr/bin/start-hyprland`. Bare
 # `hyprland` skips the env-setup wrapper that `start-hyprland` provides
@@ -107,14 +111,19 @@ GREETD_EOF
       fi
       ;;
     dms-greeter)
-      cat > "${tmp}" <<'GREETD_EOF'
-[terminal]
-vt = 1
-
-[default_session]
-command = "dms-greeter --command \"uwsm start /usr/bin/start-hyprland\""
-user = "greetd"
-GREETD_EOF
+      # dms-greeter owns /etc/greetd/config.toml AND its PAM bits and the
+      # greeter group assignment. Drive its installer so we don't fight it
+      # on re-runs. dms-greeter install --yes writes a config with the
+      # correct [terminal] vt = 1 + [default_session] blocks plus the
+      # /etc/pam.d/greetd fingerprint/U2F plug if available.
+      #
+      # The 'greeter' user (UID 976) is created by dms-greeter's sysusers.d
+      # fragment. dms-greeter install adds the desktop user to the 'greeter'
+      # group so the post-login session can read /var/cache/dms-greeter.
+      info "delegating greetd config to dms-greeter"
+      dms-greeter install --yes \
+        || die "dms-greeter install failed"
+      info "dms-greeter install complete"
       ;;
     *)
       die "unknown greeter backend: ${OMEDORA_GREETER_BACKEND}"

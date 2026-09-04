@@ -62,7 +62,7 @@ unset -f pick_console_font
 # Guard: only meaningful on a Linux TTY. No-op under Wayland/headless.
 
 if [ "$TERM" = "linux" ]; then
-    echo -en "\e]P01a1b26" #black
+    echo -en "\e]P0000000" #black — pitch black to match the starfield bg in omedora.theme.toml
     echo -en "\e]P82B2B2B" #darkgrey
     echo -en "\e]P1D75F5F" #darkred
     echo -en "\e]P9E33636" #red

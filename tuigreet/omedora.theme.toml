@@ -35,18 +35,26 @@ background = 4
 power = 12
 
 [background]
-kind = "fog"
+# Starfield gives a sparse drifting field of stars behind the form. Default
+# density (~60 stars) is tuned for an 80x24 grid so the login UI stays
+# legible regardless of monitor size — accepts the cross-monitor asymmetry
+# gracefully (no fog gradient that would look broken on a stretched VM
+# framebuffer).
+kind = "starfield"
 fps = 30
 
 [brand]
 path = "/etc/tuigreet/brand.txt"
 align = "center"
 
-[background.fog]
-speed = 1.0
-scale = 1.0
-dim = "cyan"
-bright = "cyan"
+[background.starfield]
+density      = 60
+min_speed    = 0.10
+max_speed    = 0.60
+twinkle_rate = 0.05
+# Brightness ramp from dimmest to brightest star. White-on-black reads cleanly
+# against the pitch-black TTY (palette.sh's P0 = #000000), no colour mixing.
+palette = ["#555566", "#9999aa", "#ccccdd", "#ffffff"]
 
 [session]
 sessions_dirs = ["/usr/share/wayland-sessions", "/usr/share/xsessions"]

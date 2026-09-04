@@ -58,6 +58,32 @@ self_check() {
     fi
   fi
 
+  # 4b. Greeter binary presence. Each backend ships its own binary;
+  #     auto-install when the greetd stage is on and the chosen backend
+  #     isn't reachable. dms-greeter is in avengemedia/danklinux (already
+  #     enabled in [coprs]); tuigreet is built by stage-vendor.
+  if [[ "${OMEDORA_STAGE_GREETD}" == "true" ]]; then
+    case "${OMEDORA_GREETER_BACKEND}" in
+      dms-greeter)
+        if ! command -v dms-greeter >/dev/null 2>&1; then
+          warn "dms-greeter not installed — installing now"
+          dnf5 -y install dms-greeter \
+            || die "dnf5 install dms-greeter failed. Run manually:
+  sudo dnf5 install dms-greeter"
+        fi
+        ;;
+      tuigreet)
+        if ! command -v tuigreet >/dev/null 2>&1; then
+          warn "tuigreet not installed — deferring to vendor stage"
+          # stage-vendor builds tuigreet from [vendored.tuigreet] so no
+          # standalone install here; the vendor stage's own self-check
+          # handles this.
+        fi
+        ;;
+    esac
+  fi
+
+
   # 5. Network sanity for the vendor stage. Cheap curl --head to the
   #    GitHub release hostname; non-fatal but warn.
   if [[ "${OMEDORA_STAGE_VENDOR}" == "true" ]] || \
