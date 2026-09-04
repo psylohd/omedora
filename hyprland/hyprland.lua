@@ -31,7 +31,15 @@ end
 hl.on("hyprland.start", function()
 	hl.exec_cmd("dbus-update-activation-environment --systemd --all")
 	hl.exec_cmd("systemctl --user start hyprland-session.target")
-	require("startup")  -- sets exec_once list (dms run, polkit, easyeffects, ...)
+	-- dms.service: the user manager evaluates Wants/Requisite at
+	-- evaluation time, not continuously. `hyprland-session.target`'s
+	-- BindsTo activates graphical-session.target AFTER dms.service's
+	-- first eval (the user manager is racing Hyprland's init hook).
+	-- We fire dms.service explicitly here, AFTER starting the session
+	-- target, so its `Requisite=graphical-session.target` is now
+	-- active by the time systemd re-evaluates.
+	hl.exec_cmd("systemctl --user start dms.service")
+	require("startup")  -- sets exec_once list (polkit, easyeffects, wl-clip-persist, ...)
 end)
 -- DMS_STARTUP_END
 hl.config({
