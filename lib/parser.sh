@@ -139,8 +139,15 @@ for _name, _entry in vr.items():
 # greeter
 g = cfg.get("greeter", {})
 emit("OMEDORA_GREETER_BACKEND", g.get("backend", "tuigreet"))
-
-# paths
+# privesc — escalation tool dms-greeter install should pin via
+# DMS_PRIVESC=... Valid values: sudo, doas, run0. Default 'sudo'
+# matches the rest of omedora (sudo ./install.sh).
+emit("OMEDORA_DMS_PRIVESC",      g.get("privesc", "sudo"))
+# greeter user naming. dms-greeter ships a `greeter` user; greetd RPM
+# ships `greetd`. omedora collapses the two via rename by default
+# (user_mode = "rename"). Set user_mode = "leave" to skip the rename
+# and keep whatever dms-greeter creates.
+emit("OMEDORA_GREETER_USER_MODE", g.get("user_mode", "rename"))
 def repo_abs(rel):
     if not rel:
         return ""

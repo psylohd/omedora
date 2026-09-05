@@ -174,11 +174,20 @@ points to a non-Cargo directory. Either:
   install -m 0644 "${src}/brand.txt"          /etc/tuigreet/brand.txt
 
   install -d /var/cache/tuigreet
-  # greetd RPM creates a 'greetd' system user that owns the pre-auth session.
-  if id greetd >/dev/null 2>&1; then
-    chown greetd:greetd /var/cache/tuigreet
+  # The pre-auth greetd session needs an owner on /var/cache/tuigreet.
+  # The greetd RPM ships a `greetd` system user; with dms-greeter +
+  # omedora's default [greeter].user_mode = "rename", that user has
+  # been renamed to `greeter` already. Accept whichever name exists so
+  # re-runs after a backend switch don't lose ownership.
+  local tuigreet_owner=""
+  if id greeter >/dev/null 2>&1; then
+    tuigreet_owner="greeter:greeter"
+  elif id greetd >/dev/null 2>&1; then
+    tuigreet_owner="greetd:greetd"
   fi
-  chmod 0755 /var/cache/tuigreet
+  if [[ -n "${tuigreet_owner}" ]]; then
+    chown "${tuigreet_owner}" /var/cache/tuigreet
+  fi
 }
 
 stage_config_hyprland() {

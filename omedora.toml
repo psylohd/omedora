@@ -387,6 +387,24 @@ backend = "dms-greeter"
 # installed greetd config matches what the Hyprland RPM expects to launch
 # (i.e. /usr/bin/start-hyprland, which the RPM ships). If you ever want
 # to point greetd at a custom launcher, edit stage-greetd.sh directly.
+
+# DMS_PRIVESC — privilege-escalation tool dms-greeter should pin via
+# DMS_PRIVESC=... when it shells out to install/sync. Valid: sudo | doas
+# | run0. Default 'sudo' matches the rest of omedora (sudo ./install.sh).
+# Without this, dms-greeter prompts interactively to pick a tool when
+# both sudo and run0 are detected, which kills non-interactive installs.
+privesc = "sudo"
+
+# user_mode — how to reconcile the greetd RPM's `greetd` user with the
+# `greeter` user dms-greeter creates. Default "rename" collapses them
+# into one (groupmod + usermod + home rename) before dms-greeter install
+# runs, so the box ends up with a single greeter account. Set to "leave"
+# to skip the rename and let dms-greeter create `greeter` alongside
+# the existing `greetd` (you'll see two greeter-shaped uids; harmless
+# but noisy). Idempotent across re-runs: a second run with a fresh
+# greetd user is a no-op, both-already-present warns and continues,
+# greeter-only is a no-op (dms-greeter reuses the existing user).
+user_mode = "rename"
 # ── System services ───────────────────────────────────────────────────────────
 # Stage services to systemctl enable after install. The greetd stage wires
 # the config file; this section just turns on the systemd unit. plymouth-start

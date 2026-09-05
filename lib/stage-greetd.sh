@@ -27,11 +27,15 @@ stage_greetd() {
     cp -p "${cfg}" "${bak}"
   fi
 
-  local tmp; tmp="$(mktemp /etc/greetd/config.toml.XXXXXX)"
-  # Clean up temp file on any exit (error, interrupt, etc.)
-  trap 'rm -f '"${tmp}" EXIT
+  # tmp is only populated for the tuigreet branch. For dms-greeter the
+  # installer writes /etc/greetd/config.toml itself; we must NOT clobber
+  # it with an empty tmp file. The mktemp + trap move inside the
+  # tuigreet branch so dms-greeter skips both, and the final `install`
+  # below becomes a no-op when tmp is empty.
+  local tmp=""
   case "${OMEDORA_GREETER_BACKEND}" in
     tuigreet)
+      tmp="$(mktemp /etc/greetd/config.toml.XXXXXX)"
       cat > "${tmp}" <<'GREETD_EOF'
 [terminal]
 vt = 1
@@ -118,10 +122,28 @@ GREETD_EOF
       # /etc/pam.d/greetd fingerprint/U2F plug if available.
       #
       # The 'greeter' user (UID 976) is created by dms-greeter's sysusers.d
-      # fragment. dms-greeter install adds the desktop user to the 'greeter'
-      # group so the post-login session can read /var/cache/dms-greeter.
-      info "delegating greetd config to dms-greeter"
-      dms-greeter install --yes \
+      # fragment unless it already exists. We avoid two greeter accounts
+      # on the box by renaming the greetd-RPM-shipped `greetd` user to
+      # `greeter` first (see rename_greetd_to_greeter below). When a
+      # `greeter` user is already present from a previous run, the rename
+      # is skipped — dms-greeter install will see the existing user and
+      # reuse it.
+      #
+      # DMS_PRIVESC pins the privilege-escalation tool dms-greeter uses
+      # for its sub-commands. Without it, dms-greeter prompts
+      # interactively when both sudo and run0 are present, which is fatal
+      # for a non-interactive installer. Default 'sudo' matches the rest
+      # of omedora (sudo ./install.sh).
+      local privesc="${OMEDORA_DMS_PRIVESC:-sudo}"
+      case "${privesc}" in
+        sudo|doas|run0) ;;
+        *) die "invalid [greeter].privesc: '${privesc}' (expected sudo|doas|run0)" ;;
+      esac
+      if [[ "${OMEDORA_GREETER_USER_MODE:-rename}" == "rename" ]]; then
+        rename_greetd_to_greeter
+      fi
+      info "delegating greetd config to dms-greeter (DMS_PRIVESC=${privesc})"
+      DMS_PRIVESC="${privesc}" dms-greeter install --yes \
         || die "dms-greeter install failed"
       info "dms-greeter install complete"
       ;;
@@ -130,8 +152,74 @@ GREETD_EOF
       ;;
   esac
 
-  install -m 0644 "${tmp}" "${cfg}"
-  rm -f "${tmp}"
+  if [[ -n "${tmp}" ]]; then
+    install -m 0644 "${tmp}" "${cfg}"
+    rm -f "${tmp}"
+    info "wrote ${cfg}"
+  else
+    info "${cfg} managed by ${OMEDORA_GREETER_BACKEND} (no installer-side write)"
+  fi
+}
 
-  info "wrote ${cfg}"
+# rename_greetd_to_greeter — collapse the greetd RPM's `greetd` system
+# account into the `greeter` user that dms-greeter expects, so the box
+# doesn't end up with two greeter accounts.
+#
+# Idempotent across all four state combinations:
+#
+#   greetd=exists, greeter=missing → full rename (group, user, home)
+#   greetd=exists, greeter=exists  → user left both (warn loudly)
+#   greetd=missing, greeter=exists → no-op (dms-greeter install will reuse)
+#   greetd=missing, greeter=missing → no-op (dms-greeter sysusers.d creates it)
+#
+# We deliberately do NOT delete `greetd` here when `greeter` already
+# exists — the user may have custom PAM / logind config keyed off the
+# greetd username, and silent deletion would be hostile. Just warn.
+rename_greetd_to_greeter() {
+  local have_greetd=0 have_greeter=0
+  id greetd  >/dev/null 2>&1 && have_greetd=1
+  id greeter >/dev/null 2>&1 && have_greeter=1
+
+  if (( have_greetd == 0 )); then
+    info "no 'greetd' user to rename (already absent)"
+    return 0
+  fi
+
+  if (( have_greeter == 1 )); then
+    # Two greeter accounts already coexist from a previous run that
+    # used the old installer. The user can clean this up later with:
+    #   sudo userdel -r greetd     # only if no live processes
+    # Leave both in place so the running greetd session isn't disturbed.
+    warn "both 'greetd' (uid=$(id -u greetd)) and 'greeter' (uid=$(id -u greeter)) users exist"
+    warn "omedora no longer auto-merges them; remove 'greetd' manually after a reboot if desired:"
+    warn "  sudo userdel -r greetd    # only if greetd has no live processes"
+    return 0
+  fi
+
+  # ── Both: greetd exists, greeter does not. Do the rename. ──────────────
+  # Order matters: rename the group BEFORE the user, otherwise usermod
+  # has to update a still-named-after-the-old-name primary GID and
+  # Home dir is moved at the same time as the rename via `usermod -d -m`
+  # (note: order of flags: -l first, then -d, then -m). GECOS field
+  # updated to match dms-greeter's "System Greeter" convention.
+  info "renaming 'greetd' → 'greeter' (group + user + home)"
+
+  if ! groupmod -n greeter greetd; then
+    die "groupmod -n greeter greetd failed — refusing to continue with mismatched user/group names"
+  fi
+  if ! usermod -l greeter -d /var/lib/greeter -m -c "System Greeter" greetd; then
+    die "usermod -l greeter greetd failed (group was already renamed; restore with: groupmod -n greetd greeter)"
+  fi
+
+  # future greetd-RPM reinstalls will see `greetd` as a stale entry in
+  # their sysusers.d fragment and try to recreate it. We can't suppress
+  # the RPM fragment, so the user may end up with both `greetd` and
+  # `greeter` again if they reinstall `greetd` after the rename. To
+  # prevent that, remove `/usr/lib/sysusers.d/greetd.conf` once your
+  # install is stable:
+  #   sudo rm /usr/lib/sysusers.d/greetd.conf
+  # The dms-greeter sysusers.d fragment (`u greeter` / `g greeter`)
+  # remains, so the greeter user keeps getting recreated on package
+  # reinstalls — that's the part of the rename that's sticky on its
+  # own.
 }
