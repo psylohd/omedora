@@ -97,6 +97,9 @@ stage_config_hyprland() {
   [[ -d "${src}" ]] || { warn "hyprland config dir not found: ${src} (skipping)"; return 0; }
 
   backup_and_copy_tree "${src}" "${home}/.config/hypr"
+  # Scripts/ must be executable — repo files lack the x bit; set it here so
+  # a reinstall doesn't silently break keybindings that exec shell scripts.
+  chmod +x "${home}/.config/hypr/Scripts/"* 2>/dev/null || true
   chown -R "${OMEDORA_TARGET_USER}:${OMEDORA_TARGET_USER}" "${home}/.config/hypr"
   chown "${OMEDORA_TARGET_USER}:${OMEDORA_TARGET_USER}" "${home}/.config"
 

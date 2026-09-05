@@ -107,7 +107,7 @@ hl.bind("Print", function()
 	if hl.plugin and hl.plugin.hyprcapture and hl.plugin.hyprcapture.open then
 		hl.dispatch(hl.plugin.hyprcapture.open())
 	else
-		hl.dsp.exec_cmd("hyprcapture-ui --mode region")()
+		hl.dsp.exec_cmd("hyprcapture-ui --mode region")
 	end
 end, { description = "HyprCapture screenshot overlay (region)" })
 for _, entry in ipairs(apps) do
@@ -127,14 +127,7 @@ for i = 1, smw.get_amount_of_workspaces() do
 		{ description = "Focus workspace " .. key .. " on this monitor" }
 	)
 	hl.bind("SUPER + SHIFT + " .. key,
-		function()
-			-- Move the window to target workspace AND follow it there.
-			-- smw.move_to_workspace_silent only moves (no follow), so we
-			-- use the DMS Lua API directly and pair it with a workspace
-			-- switch so the user's view tracks with the window.
-			hl.dsp.window.move({ workspace = key, follow = true })
-			smw.workspace(key)
-		end,
+		smw.move_to_workspace(key),
 		{ description = "Move active window to workspace " .. key .. " and follow it" }
 	)
 end

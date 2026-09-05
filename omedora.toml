@@ -108,7 +108,9 @@ build = [
   "hyprwayland-scanner",
   "hyprlang-devel",
   "nlohmann-json-devel",
-  "wl-clipboard",
+  "qt6-qtbase-devel",
+  "qt6-qtsvg-devel",
+  "layer-shell-qt-devel",
   "ffmpeg",
   "libnotify",
 ]

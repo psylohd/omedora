@@ -110,25 +110,27 @@ BRANCH='${branch}'
 COMMIT='${commit}'
 NAME="\$(basename "\${URL}" .git)"
 
-echo "[omedora] hyprpm add \${URL}"
-hyprpm add "\${URL}"
+# ── Build dep check ────────────────────────────────────────────────────────────
+# HyprCapture's screenshot UI needs Qt6 (qtbase + qtsvg). Install via sudo
+# if missing; if sudo fails, warn but continue — the plugin .so may still build.
+for pkg in qt6-qtbase-devel qt6-qtsvg-devel layer-shell-qt-devel; do
+    if ! rpm -q "$pkg" >/dev/null 2>&1; then
+        echo "[omedora] $pkg not found — installing..."
+        sudo dnf install -y "$pkg" || echo "[omedora] $pkg install failed"
+    fi
+done
 
-if [[ -n "\${COMMIT}" ]]; then
-    echo "[omedora] checkout \${COMMIT}"
-    hyprpm -P "\${NAME}" checkout "\${COMMIT}" || true
-elif [[ -n "\${BRANCH}" ]]; then
-    echo "[omedora] checkout \${BRANCH}"
-    hyprpm -P "\${NAME}" checkout "\${BRANCH}" || true
-fi
+# Remove any previous broken install so hyprpm add -f can re-clone fresh.
+echo "[omedora] hyprpm remove \${NAME} (if exists)"
+yes | hyprpm remove "\${NAME}" 2>/dev/null || true
 
-echo "[omedora] hyprpm -P \${NAME} build"
-hyprpm -P "\${NAME}" build
-
-echo "[omedora] hyprpm enable \${NAME}"
-hyprpm enable "\${NAME}"
+# Pipe yes to auto-confirm the trust prompt.
+# --force (-f) re-clones and rebuilds from scratch.
+echo "[omedora] hyprpm add -f \${URL}"
+yes | hyprpm add -f "\${URL}" || true
 
 echo "[omedora] hyprpm reload"
-hyprpm reload
+hyprpm reload || true
 
 echo "[omedora] HyprCapture installed."
 SH

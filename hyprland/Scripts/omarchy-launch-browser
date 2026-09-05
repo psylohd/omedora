@@ -13,31 +13,41 @@ if [[ -z $default_browser ]]; then
   exit 1
 fi
 
-browser_exec=$(sed -n 's/^Exec=\([^ ]*\).*/\1/p' \
-  {~/.local,~/.nix-profile,/usr}/share/applications/"$default_browser" 2>/dev/null | head -1)
+# Find the desktop file.
+desktop_file=""
+for dir in ~/.local/share/applications \
+            ~/.nix-profile/share/applications \
+            /usr/share/applications \
+            /var/lib/flatpak/exports/share/applications; do
+  if [[ -f "${dir}/${default_browser}" ]]; then
+    desktop_file="${dir}/${default_browser}"
+    break
+  fi
+done
 
-if [[ -z $browser_exec ]]; then
-  notify-send -a "hyprland" -u critical "Can't read $default_browser" "No Exec= line found."
+if [[ -z $desktop_file ]]; then
+  notify-send -a "hyprland" -u critical "Can't find ${default_browser}" "Desktop file not found."
   exit 1
 fi
 
-# Choose the right private flag per browser family.
-if "$browser_exec" --help 2>/dev/null | grep -q MOZ_LOG; then
-  private_flag="--private-window"
-elif [[ $browser_exec =~ edge ]]; then
-  private_flag="--inprivate"
-else
-  private_flag="--incognito"
+# Extract the app ID from the desktop filename (e.g. app.zen_browser.zen.desktop → app.zen_browser.zen)
+app_id="${default_browser%.desktop}"
+
+# Check if it's a flatpak by looking for flatpak in the Exec line or checking the file path
+is_flatpak=false
+if grep -q "flatpak" "${desktop_file}"; then
+  is_flatpak=true
 fi
 
 args=("$@")
 for i in "${!args[@]}"; do
   if [[ ${args[$i]} == "--private" ]]; then
-    args[$i]="$private_flag"
+    unset 'args[i]'
   fi
 done
 
-systemd-run --user --quiet --collect --unit="omarchy-browser-$(date +%s%N)" \
-  --property=StandardOutput=null --property=StandardError=null \
-  "$browser_exec" "${args[@]}" &
-disown
+if $is_flatpak; then
+  flatpak run "${app_id}" "${args[@]}" &
+else
+  exec "${desktop_file}" "${args[@]}"
+fi

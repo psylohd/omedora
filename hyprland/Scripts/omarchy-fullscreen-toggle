@@ -3,17 +3,18 @@
 # Also hides the DMS bar while fullscreen so the pane owns the whole screen,
 # then reveals it again when leaving fullscreen. Mirrors Ghostty's Ctrl+Enter feel.
 #
-# Uses Hyprland's native `fullscreen` dispatcher (mode 0 = cycle off→fullscreen→max).
-# Do NOT use `hl.dsp.window.fullscreen` here — that is the DMS Lua API, not a
-# Hyprland dispatcher; hyprctl dispatch only talks to Hyprland.
+# Fullscreen uses `hyprctl eval` with the DMS Lua API (hl.dsp.window.fullscreen)
+# because `hyprctl dispatch` only handles C++ dispatchers in 0.56+. Bar show/hide
+# use the `dms` CLI as a separate process (dms is not a global in eval context).
 
 was_fullscreen=$(hyprctl activewindow -j | jq -r '.fullscreen // 0')
 
 if [[ "$was_fullscreen" == "2" ]]; then
-  # Already fullscreen: dispatch once to exit (mode 0 cycles off→fs→max)
-  hyprctl dispatch fullscreen 0 >/dev/null 2>&1 || true
+  # Already fullscreen: exit fullscreen, then reveal bars
+  hyprctl eval "hl.dispatch(hl.dsp.window.fullscreen({mode='fullscreen',action='unset'}))" >/dev/null 2>&1 || true
   dms ipc call bar reveal all >/dev/null 2>&1 || true
 else
+  # Not fullscreen: hide bars, then enter fullscreen
   dms ipc call bar hide all >/dev/null 2>&1 || true
-  hyprctl dispatch fullscreen 0 >/dev/null 2>&1 || true
+  hyprctl eval "hl.dispatch(hl.dsp.window.fullscreen({mode='fullscreen',action='toggle'}))" >/dev/null 2>&1 || true
 fi
