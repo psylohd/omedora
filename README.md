@@ -25,19 +25,16 @@ btw, I don't use arch
 ## What's here
 
 ```
-omedora.toml       the entire config: packages, COPRs, vendored dms,
-                  tuigreet fork URL, greeter backend, paths, services
-install.sh        run once on a fresh Fedora Server install
-tweaks.sh         re-apply individual tweaks after the install
-lib/              stage functions shared by both scripts
-hyprland/         Hyprland Lua configs + dms/binds-user.lua + Scripts/
-DankMaterialShell/  dms settings.json, themes/, plugin_settings.json
-plymouth/         Plymouth omedora theme (script module)
-tuigreet/         tuigreet theme + palette.sh + brand.txt
-```
-The vendored dms binaries and the tuigreet Cargo workspace are NOT in the
-repo. The installer clones tuigreet from
-`https://github.com/psylohd/tuigreet.git` and builds at install time.
+omedora.toml       the entire config: packages, COPRs, greeter backend, paths, services
+ install.sh        run once on a fresh Fedora Server install
+ tweaks.sh         re-apply individual tweaks after the install
+ lib/              stage functions shared by both scripts
+ hyprland/         Hyprland Lua configs + dms/binds-user.lua + Scripts/
+ DankMaterialShell/  dms settings.json, themes/, plugin_settings.json
+ plymouth/         Plymouth omedora theme (script module)
+ ```
+ All greeter + shell binaries come from prebuilt Fedora packages / COPRs.
+ No vendored source builds in this repo.
 
 
 
@@ -55,8 +52,7 @@ Make sure Common NetworkManager Submodules and Standard are selected in software
 ## 2. Run
 
      sudo ./install.sh
-
-## 3. Reboot. You should see Plymouth → tuigreet → Hyprland → dms.
+## 3. Reboot. You should see Plymouth → dms-greeter → Hyprland → dms.
 Profit!
 
 
@@ -79,13 +75,13 @@ sudo ./tweaks.sh hyprland         # re-apply Hyprland configs
 sudo ./tweaks.sh --revert dms     # restore .bak files
 ```
 
-Available tweaks: `plymouth`, `tuigreet`, `greetd`, `hyprland`, `quickshell`,
-`dms`, `services`.
+Available tweaks: `plymouth`, `greetd`, `hyprland`, `quickshell`,
+ `dms`, `services`.
 
 ## What this does NOT do
 
-- No GNOME desktop — just Nautilus, Disks, Loupe, Text Editor (the apps).
-- No `dms-greeter` (I use a custom `tuigreet` as the login greeter).
+- dms-greeter is the only supported login greeter (configurable via
+  [greeter].user_mode in omedora.toml).
 - No "agentic os" bs. No weird non-standard tmux bindings. 
 - Provide a beginner-friendly installation for new linux users.
 - Raise 10M in funding lol

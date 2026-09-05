@@ -2,7 +2,6 @@
 #
 # Destinations:
 #   /usr/share/plymouth/themes/omedora      — Plymouth theme (system)
-#   /etc/tuigreet  + /usr/local/bin/tuigreet — tuigreet binary + config (system)
 #   $HOME/.config/hypr                     — Hyprland user config
 #   $HOME/.config/quickshell               — quickshell/dms user config
 #   $HOME/.config/nvim                     — Neovim / LazyVim user config
@@ -25,10 +24,6 @@ stage_configs() {
     stage_config_plymouth
   fi
 
-  if [[ "${OMEDORA_STAGE_TUIGREET}" == "true" ]]; then
-    section "configs: tuigreet"
-    stage_config_tuigreet
-  fi
 
   if [[ "${OMEDORA_STAGE_HYPRLAND}" == "true" ]]; then
     section "configs: hyprland"
@@ -94,101 +89,6 @@ stage_config_plymouth() {
   fi
 }
 
-stage_config_tuigreet() {
-  local src="${OMEDORA_PATH_TUIGREET}"
-  [[ -d "${src}" ]] || die "tuigreet theme dir not found: ${src}"
-
-  # Decide where the Cargo workspace lives. Each branch sets src_src to the
-  # directory containing Cargo.toml; the trap (if any) cleans it up. This
-  # avoids any set -u issues with a shared workdir variable that could be
-  # unbound depending on which branch ran.
-  local src_src=""      # absolute path to the Cargo workspace root
-  local cleanup=""      # path to remove on exit (empty = nothing to clean)
-
-  # Skip build if vendor stage already installed the binary (avoids double-build
-  # when --only tuigreet is used, which enables both vendor + tuigreet stages).
-  if ! command -v tuigreet >/dev/null 2>&1; then
-    if [[ -n "${OMEDORA_TUIGREET_REPO_URL}" ]]; then
-      # New style: clone from a pinned git URL into a scratch dir, build, clean up.
-      [[ -n "${OMEDORA_TUIGREET_BRANCH}" ]] \
-        || die "[vendored.tuigreet].branch is empty — set to e.g. 'tweak'"
-      command -v git  >/dev/null 2>&1 || die "git not found. dnf5 install git first."
-      command -v cargo >/dev/null 2>&1 || die "cargo not found. Did [packages.build] install fail?"
-
-      cleanup="$(mktemp -d)" || die "mktemp failed"
-      src_src="${cleanup}/tuigreet"
-
-      info "cloning tuigreet (${OMEDORA_TUIGREET_BRANCH})"
-      git clone --depth=1 --branch "${OMEDORA_TUIGREET_BRANCH}" \
-        "${OMEDORA_TUIGREET_REPO_URL}" "${src_src}" \
-        || die "git clone failed: ${OMEDORA_TUIGREET_REPO_URL}"
-
-      if [[ -n "${OMEDORA_TUIGREET_COMMIT}" ]]; then
-        info "checking out pinned commit ${OMEDORA_TUIGREET_COMMIT}"
-        ( cd "${src_src}" && git fetch --unshallow \
-          && git checkout "${OMEDORA_TUIGREET_COMMIT}" ) \
-          || die "git checkout failed"
-      fi
-    else
-      # Legacy style: a pre-cloned Cargo workspace already in the repo
-      # (OMEDORA_PATH_TUIGREET_SRC). Honour it if it has a Cargo.toml.
-      local legacy_src="${OMEDORA_PATH_TUIGREET_SRC:-}"
-      if [[ -z "${legacy_src}" || ! -f "${legacy_src}/Cargo.toml" ]]; then
-        die "[vendored.tuigreet].repo_url is empty and [paths.repo].tuigreet_src
-points to a non-Cargo directory. Either:
-  1. Set [vendored.tuigreet].repo_url + branch (recommended), or
-  2. Set [paths.repo].tuigreet_src to a directory containing Cargo.toml"
-      fi
-      warn "using legacy tuigreet_src path: ${legacy_src}"
-      src_src="$(dirname "${legacy_src}")"
-    fi
-
-    # ── 2. Build ───────────────────────────────────────────────────────────────
-    # Register cleanup for the clone-scratch path. The trap handler runs
-    # at function exit, after the local var has gone out of scope — so we
-    # promote the path to the environment (so the trap can still see it)
-    # and give the trap's expansion an explicit default.
-    if [[ -n "${cleanup}" ]]; then
-      export OMEDORA_TUIGREET_CLEANUP="${cleanup}"
-      trap 'rm -rf "${OMEDORA_TUIGREET_CLEANUP:-}"' RETURN
-    fi
-
-    [[ -n "${src_src}" && -f "${src_src}/Cargo.toml" ]] \
-      || die "tuigreet Cargo.toml not found in '${src_src}'"
-
-    info "building tuigreet (cargo --release)"
-    ( cd "${src_src}" && cargo build --release -p tuigreet ) \
-      || die "tuigreet build failed"
-
-    local bin="${src_src}/target/release/tuigreet"
-    [[ -x "${bin}" ]] || die "tuigreet binary missing after build: ${bin}"
-
-    install -m 0755 "${bin}" /usr/local/bin/tuigreet
-  fi
-
-
-  # ── 3. Drop the theme config ───────────────────────────────────────────────
-  install -d /etc/tuigreet
-  install -m 0644 "${src}/omedora.theme.toml" /etc/tuigreet/config.toml
-  install -m 0755 "${src}/palette.sh"         /etc/tuigreet/palette.sh
-  install -m 0644 "${src}/brand.txt"          /etc/tuigreet/brand.txt
-
-  install -d /var/cache/tuigreet
-  # The pre-auth greetd session needs an owner on /var/cache/tuigreet.
-  # The greetd RPM ships a `greetd` system user; with dms-greeter +
-  # omedora's default [greeter].user_mode = "rename", that user has
-  # been renamed to `greeter` already. Accept whichever name exists so
-  # re-runs after a backend switch don't lose ownership.
-  local tuigreet_owner=""
-  if id greeter >/dev/null 2>&1; then
-    tuigreet_owner="greeter:greeter"
-  elif id greetd >/dev/null 2>&1; then
-    tuigreet_owner="greetd:greetd"
-  fi
-  if [[ -n "${tuigreet_owner}" ]]; then
-    chown "${tuigreet_owner}" /var/cache/tuigreet
-  fi
-}
 
 stage_config_hyprland() {
   local home="$1"

@@ -13,9 +13,8 @@
 #   OMEDORA_APPS_OPTIONAL=( list )
 #   OMEDORA_DOCKER=( list )
 #   OMEDORA_DMS_WEAK_DEPS
-#   OMEDORA_PATH_PLYMOUTH, OMEDORA_PATH_TUIGREET, OMEDORA_PATH_TUIGREET_SRC
-#   OMEDORA_PATH_HYPRLAND, OMEDORA_PATH_DMS, OMEDORA_PATH_QUICKSHELL
-#   OMEDORA_PATH_NVIM
+#   OMEDORA_PATH_PLYMOUTH, OMEDORA_PATH_HYPRLAND, OMEDORA_PATH_DMS,
+#   OMEDORA_PATH_QUICKSHELL, OMEDORA_PATH_NVIM, OMEDORA_PATH_WALLPAPERS
 #   OMEDORA_DMS_PLUGINS=( list )
 #   OMEDORA_HYPRLAND_PLUGINS=( list )   # git URLs cloned into ~/.config/hypr/plugins/
 
@@ -95,12 +94,8 @@ emit("OMEDORA_DOCKER", _docker_pkgs)
 # dms from COPR (avengemedia/dms + avengemedia/danklinux)
 dms_cfg = cfg.get("packages", {}).get("dms", {})
 emit("OMEDORA_DMS_WEAK_DEPS", str(bool(dms_cfg.get("install_weak_deps", True))).lower())
-
-vendored_cfg = cfg.get("vendored", {})
-vtg_cfg = vendored_cfg.get("tuigreet", {})
-emit("OMEDORA_TUIGREET_REPO_URL",  vtg_cfg.get("repo_url", ""))
-emit("OMEDORA_TUIGREET_BRANCH",    vtg_cfg.get("branch", ""))
-emit("OMEDORA_TUIGREET_COMMIT",    vtg_cfg.get("commit", ""))
+# (No vendored source builds — all greeter and shell binaries come from
+# prebuilt Fedora / COPR packages.)
 # flatpak
 # Two scopes per the flatpak CLI: `--system` lands apps at /var/lib/flatpak
 # (visible to every user; the only mode that survives a multi-user setup),
@@ -138,7 +133,9 @@ for _name, _entry in vr.items():
 
 # greeter
 g = cfg.get("greeter", {})
-emit("OMEDORA_GREETER_BACKEND", g.get("backend", "tuigreet"))
+# backend key — only 'dms-greeter' is supported. Other values (legacy
+# 'tuigreet') fail in stage-greetd.sh with a clear error.
+emit("OMEDORA_GREETER_BACKEND", g.get("backend", "dms-greeter"))
 # privesc — escalation tool dms-greeter install should pin via
 # DMS_PRIVESC=... Valid values: sudo, doas, run0. Default 'sudo'
 # matches the rest of omedora (sudo ./install.sh).
@@ -156,8 +153,6 @@ def repo_abs(rel):
 
 p = cfg.get("paths", {}).get("repo", {})
 emit("OMEDORA_PATH_PLYMOUTH",   repo_abs(p.get("plymouth", "plymouth")))
-emit("OMEDORA_PATH_TUIGREET",   repo_abs(p.get("tuigreet", "tuigreet")))
-emit("OMEDORA_PATH_TUIGREET_SRC", repo_abs(p.get("tuigreet_src", "")))
 emit("OMEDORA_PATH_HYPRLAND",   repo_abs(p.get("hyprland", "hyprland")))
 emit("OMEDORA_PATH_DMS",        repo_abs(p.get("dms", "DankMaterialShell")))
 emit("OMEDORA_PATH_QUICKSHELL", repo_abs(p.get("quickshell", "quickshell")))
@@ -206,18 +201,9 @@ svc = cfg.get("services", {})
 emit("OMEDORA_SERVICES_ENABLE", svc.get("enable", []))
 emit("OMEDORA_SERVICES_DEFAULT", svc.get("set_default", "graphical.target"))
 
-# greeter.outputs — per-monitor config list used by stage-greetd.sh
-# to emit `[[outputs]]` blocks in tuigreet's /etc/tuigreet/config.toml.
-# Each entry is a pipe-delimited string so bash can array-append it.
-gr = cfg.get("greeter", {})
-if gr.get("backend", "") == "tuigreet":
-    outputs = gr.get("outputs", [])
-    print("OMEDORA_GREETER_OUTPUTS=( )")
-    for o in outputs:
-        connector = o.get("connector", "").replace("|", " ")
-        enabled   = "true" if o.get("enabled", True)  else "false"
-        primary   = "true" if o.get("primary", False) else "false"
-        print(f"OMEDORA_GREETER_OUTPUTS+=( 'connector={connector}|enabled={enabled}|primary={primary}' )")
+# (No greeter.outputs handling — dms-greeter manages its own per-monitor
+# config via `dms-greeter sync`; tuigreet was the only consumer of this
+# TOML list.)
 
 # Stage toggles
 stg = cfg.get("stages", {})

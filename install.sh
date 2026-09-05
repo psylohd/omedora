@@ -13,8 +13,7 @@
 #   sudo ./install.sh                  # full run
 #   sudo ./install.sh --config PATH    # alternate config
 #   sudo ./install.sh --dry-run        # show stages, do nothing
-#   sudo ./install.sh --only dnf,vendor
-#   sudo ./install.sh --skip greetd
+#   sudo ./install.sh --only dnf,flatpak
 #
 # Re-running is safe: every stage is idempotent (timestamped .bak on
 # conflicts, services re-enabled are no-ops, packages already installed
@@ -42,19 +41,18 @@ Usage: sudo ./install.sh [options]
 Options:
   --config PATH      use a non-default omedora.toml
   --dry-run          print what would happen, do nothing
-  --only stages      comma-separated list of stages to run (e.g. dnf,vendor)
+  --only stages      comma-separated list of stages to run (e.g. dnf,flatpak)
   --skip stages      comma-separated list of stages to skip
   --no-reboot        skip the automatic reboot at the end (e.g. for headless
                      automation that wants to do its own reboot)
   -h, --help         this help
 
 
-Stages (toggleable in omedora.toml [stages]):
-  copr, dnf, vendor, flatpak, plymouth, tuigreet, hyprland,
-  quickshell, greetd, dms, keyring, userdirs, services, hyprland-plugins,
-  hyprcapture
-(configs = plymouth + tuigreet + hyprland + quickshell in one pass;
- plymouth/tuigreet/hyprland/quickshell are also accepted as aliases for configs)
+# Stages (toggleable in omedora.toml [stages]):
+#   copr, dnf, flatpak, greetd, dms, keyring, userdirs, services,
+#   hyprland-plugins, hyprcapture, wallpapers
+# (configs = plymouth + hyprland + quickshell in one pass;
+#  plymouth/hyprland/quickshell are also accepted as aliases for configs)
 
 Default config: ${SCRIPT_DIR}/omedora.toml
 USAGE
@@ -75,9 +73,10 @@ done
 # ── Load config + helpers ─────────────────────────────────────────────────────
 source "${SCRIPT_DIR}/lib/parser.sh"
 source "${SCRIPT_DIR}/lib/self-check.sh"
-for _stage in copr dnf vendor flatpak configs greetd dms keyring userdirs services hyprland-plugins hyprcapture wallpapers; do
+for _stage in copr dnf flatpak configs greetd dms keyring userdirs services hyprland-plugins hyprcapture wallpapers; do
   source "${SCRIPT_DIR}/lib/stage-${_stage}.sh"
 done
+
 
 # Monitor detection (used by stage-greetd.sh to default-enable the
 # largest connected output). Doesn't read /sys itself unless called —
@@ -92,13 +91,12 @@ apply_stage_filter() {
   # When --only is passed, reset all known stages to false first so --only
   # starts from a known-clean slate. Without --only, leave the TOML-emitted
   # values alone (don't disable what the user explicitly enabled).
-  #
-  # plymouth/tuigreet/hyprland/quickshell are accepted as aliases for the
-  # 'configs' stage (which runs all four in one pass). The iteration list
-  # below contains both names so users can pass either via --only.
+  # plymouth/hyprland/quickshell are accepted as aliases for the 'configs'
+  # stage (which runs all three in one pass). The iteration list below
+  # contains both names so users can pass either via --only.
   if [[ -n "${ONLY}" ]]; then
 
-    for s in copr dnf vendor flatpak plymouth tuigreet hyprland quickshell configs greetd dms keyring userdirs services hyprland-plugins hyprcapture wallpapers; do
+    for s in copr dnf flatpak plymouth hyprland quickshell configs greetd dms keyring userdirs services hyprland-plugins hyprcapture wallpapers; do
       printf -v "$(stage_flag_name "${s}")" "false"
     done
     IFS=',' read -ra list <<< "${ONLY}"
@@ -109,23 +107,13 @@ apply_stage_filter() {
         plymouth)
           printf -v "OMEDORA_STAGE_PLYMOUTH" "true"
           printf -v "OMEDORA_STAGE_CONFIGS" "true" ;;
-        tuigreet)
-          # tuigreet binary is installed by the dnf stage; greetd needs it.
-          printf -v "OMEDORA_STAGE_DNF" "true"
-          printf -v "OMEDORA_STAGE_TUIGREET" "true"
-          printf -v "OMEDORA_STAGE_GREETD" "true"
-          printf -v "OMEDORA_STAGE_CONFIGS" "true" ;;
         hyprland)
-          printf -v "OMEDORA_STAGE_HYPRLAND" "true"
-          printf -v "OMEDORA_STAGE_CONFIGS" "true" ;;
-        quickshell)
           printf -v "OMEDORA_STAGE_DNF" "true"
           printf -v "OMEDORA_STAGE_QUICKSHELL" "true"
           printf -v "OMEDORA_STAGE_CONFIGS" "true" ;;
         dms)
-          # dms binary + greeter binary come from the vendor stage.
+          # dms binary + greeter binary come from the dnf stage (COPR).
           printf -v "OMEDORA_STAGE_DNF" "true"
-          printf -v "OMEDORA_STAGE_VENDOR" "true"
           printf -v "OMEDORA_STAGE_DMS" "true" ;;
         hyprland-plugins)
           # Pure-Lua Hyprland plugins (cloned to ~/.config/hypr/plugins/).
@@ -162,8 +150,8 @@ fi
 
 # Sanity: confirm greeter backend is sane.
 case "${OMEDORA_GREETER_BACKEND}" in
-  tuigreet|dms-greeter) ;;
-  *) die "unknown greeter backend: ${OMEDORA_GREETER_BACKEND} (expected 'tuigreet' or 'dms-greeter')" ;;
+  dms-greeter) ;;
+  *) die "unknown greeter backend: ${OMEDORA_GREETER_BACKEND} (expected 'dms-greeter')" ;;
 esac
 
 # ── Plan ──────────────────────────────────────────────────────────────────────
@@ -173,11 +161,11 @@ echo "  target user: ${OMEDORA_TARGET_USER}"
 echo "  greeter:     ${OMEDORA_GREETER_BACKEND}"
 echo "  repo root:   ${OMEDORA_REPO_ROOT}"
 echo "  config:      ${OMEDORA_CONFIG}"
-for s in copr dnf vendor flatpak plymouth tuigreet hyprland quickshell greetd dms keyring userdirs services hyprland-plugins hyprcapture wallpapers; do
+for s in copr dnf flatpak plymouth hyprland quickshell greetd dms keyring userdirs services hyprland-plugins hyprcapture wallpapers; do
   f="$(stage_flag_name "${s}")"
   v="${!f:-false}"
-  if [[ "${s}" == "plymouth" ]] || [[ "${s}" == "tuigreet" ]] || \
-     [[ "${s}" == "hyprland" ]] || [[ "${s}" == "quickshell" ]]; then
+  if [[ "${s}" == "plymouth" ]] || \
+     [[ "${s}" == "hyprland" ]] ||  [[ "${s}" == "quickshell" ]]; then
     [[ "${v}" == "true" ]] && parent="(via configs)" || parent=""
     printf "    %-12s %s %s\n" "${s}" "${v}" "${parent}"
   else
@@ -194,10 +182,9 @@ self_check
 # ── Run stages ────────────────────────────────────────────────────────────────
 run_stage copr       stage_copr
 run_stage dnf        stage_dnf
-run_stage vendor     stage_vendor
 run_stage flatpak    stage_flatpak
 run_stage greetd     stage_greetd       # wire /etc/greetd/config.toml + start-hyprland
-run_stage configs    stage_configs      # plymouth + tuigreet + hyprland + quickshell in one pass
+run_stage configs    stage_configs      # plymouth + hyprland + quickshell in one pass
 run_stage dms        stage_dms          # DankMaterialShell config + plugins
 run_stage hyprland-plugins stage_hyprland_plugins  # clone Lua plugins to ~/.config/hypr/plugins/
 run_stage hyprcapture stage_hyprcapture  # hyprpm add HyprCapture + build .so + helper
@@ -210,13 +197,12 @@ cat <<DONE
 
 Next steps:
   1. Reboot:   systemctl reboot
-  2. Greetd → tuigreet (or dms-greeter) → Hyprland → dms via exec-once.
+  2. Greetd → dms-greeter → Hyprland → dms via exec-once.
   3. If Plymouth doesn't load: dracut -f --regenerate-all
-  4. To re-run only a stage:  sudo ./install.sh --only vendor
+  4. To re-run only a stage:  sudo ./install.sh --only dnf
 
 All installed files live under:
   /usr/share/plymouth/themes/omedora
-  /etc/tuigreet/                /usr/local/bin/tuigreet
   /etc/greetd/config.toml       /usr/bin/start-hyprland
   /usr/local/bin/{dms,dgop}
   ~${OMEDORA_TARGET_USER}/.config/hypr/

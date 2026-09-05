@@ -106,7 +106,7 @@ stage_dnf() {
   info "installing build toolchain (${#OMEDORA_BUILD[@]} packages)"
   if [[ ${#OMEDORA_BUILD[@]} -gt 0 ]]; then
     dnf5 -y install "${copr_flags[@]}" "${OMEDORA_BUILD[@]}" \
-      || warn "build toolchain install failed — tuigreet build will fail"
+      || warn "build toolchain install failed"
   fi
 
   info "installing optional COPR packages (${#OMEDORA_APPS_OPTIONAL[@]} packages)"

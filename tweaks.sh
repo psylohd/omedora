@@ -12,7 +12,6 @@
 # Usage:
 #   sudo ./tweaks.sh                     # list available tweaks
 #   sudo ./tweaks.sh plymouth            # re-apply Plymouth omedora theme
-#   sudo ./tweaks.sh tuigreet            # rebuild + reinstall tuigreet
 #   sudo ./tweaks.sh greetd              # rewrite /etc/greetd/config.toml
 #   sudo ./tweaks.sh hyprland            # redeploy ~/.config/hypr/
 #   sudo ./tweaks.sh quickshell          # redeploy ~/.config/quickshell/
@@ -39,8 +38,6 @@ load_config
 # Each entry: name → bash function that performs the tweak.
 declare -A TWEAK_FN=(
   [plymouth]=tweak_plymouth
-  [tuigreet]=tweak_tuigreet
-  [greetd]=tweak_greetd
   [hyprland]=tweak_hyprland
   [quickshell]=tweak_quickshell
   [dms]=tweak_dms
@@ -54,7 +51,6 @@ declare -A TWEAK_FN=(
 )
 declare -A TWEAK_DESC=(
   [plymouth]="Plymouth omedora theme (script module)"
-  [tuigreet]="Rebuild + install tuigreet from [vendored.tuigreet]"
   [greetd]="Wire /etc/greetd/config.toml + /usr/local/bin/start-hyprland"
   [hyprland]="Deploy hyprland/ → ~/.config/hypr/"
   [quickshell]="Deploy quickshell/ → ~/.config/quickshell/"
@@ -83,7 +79,6 @@ list_tweaks() {
 
 source "${SCRIPT_DIR}/lib/stage-copr.sh"
 source "${SCRIPT_DIR}/lib/stage-dnf.sh"
-source "${SCRIPT_DIR}/lib/stage-vendor.sh"
 source "${SCRIPT_DIR}/lib/stage-configs.sh"
 source "${SCRIPT_DIR}/lib/stage-userdirs.sh"
 source "${SCRIPT_DIR}/lib/stage-services.sh"
@@ -96,8 +91,6 @@ source "${SCRIPT_DIR}/lib/stage-hyprcapture.sh"
 source "${SCRIPT_DIR}/lib/detect-monitors.sh"
 
 tweak_plymouth()   { section "tweak: plymouth";   stage_config_plymouth; }
-tweak_tuigreet()   { section "tweak: tuigreet";   stage_config_tuigreet; }
-tweak_greetd()     { section "tweak: greetd";     stage_greetd; }
 tweak_hyprland()   {
   local home; home="$(getent passwd "${OMEDORA_TARGET_USER}" | cut -d: -f6)"
   section "tweak: hyprland"
@@ -133,9 +126,6 @@ tweak_diff() {
     plymouth)
       echo "  /usr/share/plymouth/themes/omedora/"
       echo "  /etc/plymouth/plymouthd.conf" ;;
-    tuigreet)
-      echo "  /usr/local/bin/tuigreet"
-      echo "  /etc/tuigreet/{config.toml,palette.sh,brand.txt}" ;;
     greetd)
       echo "  /etc/greetd/config.toml"
       echo "  /usr/local/bin/start-hyprland" ;;
@@ -160,8 +150,6 @@ tweak_revert() {
   local paths=()
   case "${name}" in
     plymouth) paths=(/usr/share/plymouth/themes/omedora /etc/plymouth/plymouthd.conf) ;;
-    tuigreet) paths=(/usr/local/bin/tuigreet /etc/tuigreet) ;;
-    greetd)   paths=(/etc/greetd/config.toml /usr/local/bin/start-hyprland) ;;
     hyprland)
       local h; h="$(getent passwd "${OMEDORA_TARGET_USER}" | cut -d: -f6)"
       paths=("${h}/.config/hypr") ;;

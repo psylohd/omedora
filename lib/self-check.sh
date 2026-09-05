@@ -58,39 +58,27 @@ self_check() {
     fi
   fi
 
-  # 4b. Greeter binary presence. Each backend ships its own binary;
-  #     auto-install when the greetd stage is on and the chosen backend
-  #     isn't reachable. dms-greeter is in avengemedia/danklinux (already
-  #     enabled in [coprs]); tuigreet is built by stage-vendor.
+  # 4b. Greeter binary presence. dms-greeter is in avengemedia/danklinux
+  #     (already enabled in [coprs]). Auto-install when the greetd
+  #     stage is on and the binary isn't reachable.
   if [[ "${OMEDORA_STAGE_GREETD}" == "true" ]]; then
-    case "${OMEDORA_GREETER_BACKEND}" in
-      dms-greeter)
-        if ! command -v dms-greeter >/dev/null 2>&1; then
-          warn "dms-greeter not installed — installing now"
-          dnf5 -y install dms-greeter \
-            || die "dnf5 install dms-greeter failed. Run manually:
+    if [[ "${OMEDORA_GREETER_BACKEND}" != "dms-greeter" ]]; then
+      die "unsupported greeter backend: '${OMEDORA_GREETER_BACKEND}' (only 'dms-greeter' is supported; tuigreet was removed)"
+    fi
+    if ! command -v dms-greeter >/dev/null 2>&1; then
+      warn "dms-greeter not installed — installing now"
+      dnf5 -y install dms-greeter \
+        || die "dnf5 install dms-greeter failed. Run manually:
   sudo dnf5 install dms-greeter"
-        fi
-        ;;
-      tuigreet)
-        if ! command -v tuigreet >/dev/null 2>&1; then
-          warn "tuigreet not installed — deferring to vendor stage"
-          # stage-vendor builds tuigreet from [vendored.tuigreet] so no
-          # standalone install here; the vendor stage's own self-check
-          # handles this.
-        fi
-        ;;
-    esac
+    fi
   fi
 
 
-  # 5. Network sanity for the vendor stage. Cheap curl --head to the
-  #    GitHub release hostname; non-fatal but warn.
-  if [[ "${OMEDORA_STAGE_VENDOR}" == "true" ]] || \
-     [[ "${OMEDORA_STAGE_COPR}" == "true" ]] || \
+  # 5. Network sanity for stages that hit github.com (COPR + flatpak).
+  if [[ "${OMEDORA_STAGE_COPR}" == "true" ]] || \
      [[ "${OMEDORA_STAGE_FLATPAK}" == "true" ]]; then
     if ! curl -fsSL --max-time 5 -o /dev/null https://github.com 2>/dev/null; then
-      warn "github.com unreachable — vendor / COPR / flatpak stages may fail"
+      warn "github.com unreachable — COPR / flatpak stages may fail"
     fi
   fi
 
@@ -104,24 +92,6 @@ self_check() {
     fi
   fi
 
-  # 8. tuigreet: skip src-workspace check if we'll clone fresh from
-  #    [vendored.tuigreet].repo_url. Otherwise, require a pre-cloned
-  #    Cargo workspace at [paths.repo].tuigreet_src.
-  if [[ "${OMEDORA_STAGE_TUIGREET}" == "true" ]]; then
-    if [[ -z "${OMEDORA_TUIGREET_REPO_URL}" ]]; then
-      if [[ ! -d "${OMEDORA_PATH_TUIGREET_SRC}" ]]; then
-        die "tuigreet Cargo workspace not found: ${OMEDORA_PATH_TUIGREET_SRC}
-Set [vendored.tuigreet].repo_url + branch (recommended), or point
-[paths.repo].tuigreet_src at a directory containing Cargo.toml."
-      fi
-      if [[ ! -f "${OMEDORA_PATH_TUIGREET_SRC}/Cargo.toml" ]]; then
-        die "Cargo.toml missing in ${OMEDORA_PATH_TUIGREET_SRC}"
-      fi
-    fi
-    if [[ ! -f "${OMEDORA_PATH_TUIGREET}/omedora.theme.toml" ]]; then
-      die "tuigreet theme not found: ${OMEDORA_PATH_TUIGREET}/omedora.theme.toml"
-    fi
-  fi
 
   # 9. Hyprland + quickshell config dirs are optional — the script handles
   #    a missing dir gracefully (warn + skip). But warn the user upfront.

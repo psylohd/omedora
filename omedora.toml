@@ -148,13 +148,12 @@ runtime = [
   "polkit",
 ]
 # ── Build toolchain ──────────────────────────────────────────────────────────
-# Required to build tuigreet from source at install time. Not strictly
-# needed on the deployed system once tuigreet is built; can be removed
-# later with `dnf remove rust cargo` if you want a leaner system.
+# (No standalone build toolchain required. All greeter/shell binaries come
+# from prebuilt Fedora + COPR packages. dms-greeter is installed via dnf;
+# HyprCapture builds itself via hyprpm and pulls its toolchain from
+# [packages.hyprland].build above.)
 [packages.build]
 required = [
-  "rust",                           # rustc + cargo, official Fedora (1.98.x in F44)
-  "cargo",
 ]
 
 # ── Vendored binaries (replaces curl|bash for projects that lag in COPRs) ─────
@@ -183,9 +182,8 @@ required = [
   # greetd hands the VT over to whichever greeter is selected by [greeter].backend;
   # today the default is dms-greeter (avengemedia/danklinux COPR), a Wayland
   # greeter that runs inside the user's graphical environment and avoids the
-  # cross-monitor mirroring that bare-framebuffer tuigreet exhibits. The
-  # post-login command chain (`uwsm start /usr/bin/start-hyprland`) is identical
-  # between backends so logged-in behaviour doesn't change.
+  # post-login command chain (`uwsm start /usr/bin/start-hyprland`) is
+  # identical between backends so logged-in behaviour doesn't change.
   "greetd", "accountsservice", "polkit", "dms-greeter",
   # Audio
   "pipewire", "pipewire-pulseaudio", "wireplumber",
@@ -241,14 +239,8 @@ required = [
   "@virtualization",
 ]
 # ── Vendored source builds ─────────────────────────────────────────────────────
-# tuigreet is built from a git fork at install time. The vendor stage clones
-# it, runs `cargo build --release`, and installs the binary to /usr/local/bin/.
-# branch defaults to "master" — change if the fork uses a different base.
-[vendored.tuigreet]
-repo_url = "https://github.com/psylohd/tuigreet.git"
-branch   = "tweak"
-commit   = ""        # optional: pin to a specific commit hash
- 
+# (Empty — all greeter/shell binaries now come from prebuilt Fedora + COPR
+# packages. dms-greeter is installed by the dnf stage.)
 # ── Vendored .repo files ──────────────────────────────────────────────────────
 # Used when an upstream project doesn't host a `.repo` file at a stable URL
 # (so `dnf5 config-manager addrepo --from-repofile` can't fetch them) and we
@@ -370,8 +362,6 @@ commit   = ""
 # Drop each tree into target_user's $HOME with timestamped .bak on conflict.
 [paths.repo]
 plymouth   = "plymouth"           # → /usr/share/plymouth/themes/omedora
-tuigreet   = "tuigreet"           # → /etc/tuigreet  + /usr/local/bin/tuigreet
-tuigreet_src = ""                 # legacy: path to a pre-cloned Cargo workspace
 hyprland   = "hyprland"           # → $HOME/.config/hypr
 nvim       = "nvim"            # → $HOME/.config/nvim (LazyVim)
 dms        = "DankMaterialShell"  # → $HOME/.config/DankMaterialShell
@@ -379,10 +369,10 @@ wallpapers = "wallpapers"        # → $HOME/Pictures/wallpapers/ (flattened; th
 [greeter]
 # dms-greeter is a Wayland greeter. Draws inside a real session — no
 # bare-VT framebuffer mirror across monitors, and it inherits Hyprland's
-# DRM master at the same instant it spawns the post-login command.
-# tuigreet is still wired and selectable; flip this back to "tuigreet"
-# (and remove dms-greeter from [packages.apps].required) to revert.
 backend = "dms-greeter"
+# dms-greeter is the only supported greeter backend. To change the
+# default username / home that dms-greeter uses, see [greeter].user_mode
+# in omedora.toml (rename | leave).
 # The exact command + user are hardcoded in lib/stage-greetd.sh so the
 # installed greetd config matches what the Hyprland RPM expects to launch
 # (i.e. /usr/bin/start-hyprland, which the RPM ships). If you ever want
@@ -447,10 +437,8 @@ xdg_programs_dir  = "programs"
  [stages]
  copr      = true
  dnf       = true
- vendor    = true
  flatpak   = true
  plymouth  = true
- tuigreet  = true
  hyprland  = true
  quickshell = true
 keyring   = true    # Enable pam_gnome_keyring in PAM + start --components=secrets

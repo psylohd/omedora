@@ -1,6 +1,7 @@
 # lib/detect-monitors.sh — detect currently-connected monitors via
 # /sys/class/drm EDID, rank by physical area, and feed a sorted list
-# to stage-greetd.sh so the auto-generated tuigreet config only enables
+# to stage-greetd.sh (currently unused — dms-greeter manages its own
+# per-monitor config — but kept for future backends).
 # the largest one(s).
 #
 # Why EDID over /sys/class/drm/{modes,edid}?  EDID's bytes 21..22 are

@@ -68,7 +68,7 @@ stage_dms() {
   # must run as the desktop user. `sudo -H` strips $HOME which would
   # land plugins in /root; use `sudo -u` without -H so $HOME survives.
   if ! command -v dms >/dev/null 2>&1; then
-    die "dms binary not in PATH. Did [stages].vendor run successfully?"
+    die "dms binary not in PATH. Did the dnf stage run successfully?"
   fi
 
   # `dms plugins install` (plural) for registry IDs.
