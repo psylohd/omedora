@@ -57,7 +57,23 @@ stage_greetd() {
   DMS_PRIVESC="${privesc}" dms-greeter install --yes \
     || die "dms-greeter install failed"
   info "dms-greeter install complete"
-  info "${cfg} managed by dms-greeter (no installer-side write)"
+
+  # ── dms-greeter sync: run now (install phase, as root) ─────────────────────
+  # dms-greeter sync -y writes the greeter theme/wallpaper/settings from the
+  # current user's DMS config. Running it now (during install, as root) means
+  # the greeter looks correct on the very first login — no visual pop.
+  #
+  # Escalation: pkexec --user root (the greeter daemon user) because the
+  # target user's DMS config lives under their home dir which greeter can't
+  # read. pkexec with polkit approval (user in wheel group) avoids needing
+  # any password or NOPASSWD sudoers entry.
+  info "syncing DMS theme/wallpaper to greeter"
+  if pkexec --user root --disable-internal-agent dms-greeter sync -y \
+       2>&1 | sed 's/^/  /'; then
+    info "dms-greeter sync complete"
+  else
+    warn "dms-greeter sync failed (continuing)"
+  fi
 }
 
 # rename_greetd_to_greeter — collapse the greetd RPM's `greetd` system
