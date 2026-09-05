@@ -73,7 +73,7 @@ local conflicts = {
 	-- Layout toggle + reload + exit
 	"SUPER + L", "SUPER + SHIFT + L", "SUPER + R", "SUPER + Escape",
 	-- Minimize / restore (added in § 9)
-	"SUPER + MINUS", "SUPER + equal",
+	"SUPER + MINUS", "SUPER + CTRL + equal", "SUPER + equal",
 	-- Mouse-button binds: SUPER + LMB drag is rebound in § 8.
 	-- dms upstream does NOT bind this by default, but listing it
 	-- here future-proofs against a future dms release that adds it.
@@ -223,24 +223,29 @@ hl.bind("SUPER + MINUS",
 	hl.dsp.window.move({ workspace = "special:minimized", follow = false }),
 	{ description = "Minimize current window to scratchpad" }
 )
+hl.bind("SUPER + CTRL + equal",
+	hl.dsp.workspace.toggle_special("minimized"),
+	{ description = "Toggle minimized windows workspace" }
+)
 hl.bind("SUPER + equal",
 	function()
+		-- Capture destination workspace before touching special.
+		local cur = hl.get_active_workspace()
+		local dest = cur and cur.name or "1"
+
 		for _, ws in ipairs(hl.get_workspaces()) do
 			local nm = ws.name or ""
 			if nm == "special:minimized" or nm == "minimized" then
-				-- If there's a window parked there, restore it. Otherwise
-				-- the special exists but is empty: nothing to bring back,
-				-- leave the bind as a no-op rather than closing an empty
-				-- special (which would do nothing visible anyway, but a
-				-- stray log line is worse than a quiet keypress).
-				if #(hl.get_workspace_windows(ws)) >0 then
+				local wins = hl.get_workspace_windows(ws)
+				if #wins > 0 then
+					-- Open special to refresh window addresses, focus the last
+					-- (most recently parked) window, then move it out.
 					hl.dispatch(hl.dsp.workspace.toggle_special("minimized"))
-					-- The toggled-open special focuses its first window.
-					-- Move it back to the workspace that was active right
-					-- before restore (the snippet uses "+0" which Hyprland
-					-- expands to "current workspace" — i.e. the workspace
-					-- the user was on when they hit SUPER+=).
-					hl.dispatch(hl.dsp.window.move({ workspace = "+0", follow = true }))
+					local win = wins[#wins]
+					-- Focus the specific window by address.
+					hl.dispatch(hl.dsp.focus({ window = win.address }))
+					-- Move the now-focused window to the destination workspace.
+					hl.dispatch(hl.dsp.window.move({ workspace = dest }))
 				end
 				return
 			end

@@ -107,6 +107,7 @@ The module ships in the 'gnome-keyring-pam' package. Add it to
 backup_and_install_etc() {
   local target="$1"
   if [[ -e "${target}" ]]; then
+    rm -f "${target}.bak".* 2>/dev/null || true
     local bak="${target}.bak.$(date +%Y%m%d-%H%M%S)"
     info "  backing up ${target} → ${bak}"
     cp -p "${target}" "${bak}"

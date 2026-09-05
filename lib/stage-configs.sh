@@ -200,7 +200,9 @@ backup_and_install() {
   local src="$1" dst="$2"
   install -d "$(dirname "${dst}")"
   if [[ -f "${dst}" ]]; then
-    local bak="${dst}.bak.$(date +%Y%m%d-%H%M%S)"
+    local bak="${dst}.bak"
+    rm -f "${bak}".* 2>/dev/null || true
+    bak="${bak}.$(date +%Y%m%d-%H%M%S)"
     info "  backing up ${dst} → ${bak}"
     cp -p "${dst}" "${bak}"
   fi
@@ -222,6 +224,7 @@ backup_and_copy_tree() {
     name="$(basename "${entry}")"
     local target="${dst}/${name}"
     if [[ -e "${target}" ]]; then
+      rm -f "${target}.bak".* 2>/dev/null || true
       local bak="${target}.bak.$(date +%Y%m%d-%H%M%S)"
       info "  backing up ${target} → ${bak}"
       cp -p "${target}" "${bak}"

@@ -73,7 +73,7 @@ done
 # ── Load config + helpers ─────────────────────────────────────────────────────
 source "${SCRIPT_DIR}/lib/parser.sh"
 source "${SCRIPT_DIR}/lib/self-check.sh"
-for _stage in copr dnf flatpak configs greetd dms keyring userdirs services hyprland-plugins hyprcapture wallpapers; do
+for _stage in copr dnf flatpak configs greetd dms keyring userdirs services libvirt hyprland-plugins hyprcapture wallpapers; do
   source "${SCRIPT_DIR}/lib/stage-${_stage}.sh"
 done
 
@@ -96,7 +96,7 @@ apply_stage_filter() {
   # contains both names so users can pass either via --only.
   if [[ -n "${ONLY}" ]]; then
 
-    for s in copr dnf flatpak plymouth hyprland quickshell configs greetd dms keyring userdirs services hyprland-plugins hyprcapture wallpapers; do
+    for s in copr dnf flatpak plymouth hyprland quickshell configs greetd dms keyring userdirs services libvirt hyprland-plugins hyprcapture wallpapers; do
       printf -v "$(stage_flag_name "${s}")" "false"
     done
     IFS=',' read -ra list <<< "${ONLY}"
@@ -191,8 +191,8 @@ run_stage hyprcapture stage_hyprcapture  # hyprpm add HyprCapture + build .so + 
 run_stage keyring    stage_keyring      # GNOME keyring auto-unlock at greetd login
 run_stage userdirs   stage_user_dirs    # default XDG dirs + custom dev/projects/programs
 run_stage services   stage_services
+run_stage libvirt    stage_libvirt
 run_stage wallpapers stage_wallpapers     # repo wallpapers/ → $HOME/Pictures/wallpapers/
-# ── Done ──────────────────────────────────────────────────────────────────────
 cat <<DONE
 
 Next steps:

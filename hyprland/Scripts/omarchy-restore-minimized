@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# Restore the most recently minimized window to the current workspace.
+# Uses hyprctl as subprocess — no Lua/smw/flash.
+set -euo pipefail
+
+DEST=$(hyprctl activeworkspace 2>/dev/null | grep -oP 'ID \K[0-9-]+' || echo "1")
+
+ADDR=$(hyprctl workspaces 2>/dev/null | awk '
+  /special:minimized/ { found=1; next }
+  found && /^[0-9]+ windows/ {
+    gsub(/.*lastwindow: /, ""); gsub(/[[:space:]].*/, "")
+    print; exit
+  }
+' || true)
+
+if [[ -z "$ADDR" ]]; then
+  exit 0
+fi
+
+hyprctl dispatch movetoworkspacesilent "$ADDR" "$DEST" 2>/dev/null || true
+hyprctl dispatch focuswindow "address:$ADDR" 2>/dev/null || true

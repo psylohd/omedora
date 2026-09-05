@@ -16,7 +16,7 @@
 [meta]
 name        = "omedora"
 description = "Minimal Fedora + Hyprland + dms + curated apps"
-target_user = ""                  # REQUIRED: set to the desktop user account.
+target_user = "" #Not required anymore. Might be dead?
 
 # ── Repositories
 [coprs]
@@ -26,13 +26,8 @@ enable = [
   "lionheartp/Hyprland",          # the Hyprland stack on Fedora 43/44/45
   "leloubil/wl-clip-persist",     # Wayland clipboard persistence
   "tofik/nwg-shell",              # nwg-look + nwg-displays
+  "atim/starship",                # starship prompt
   # NOTE: ghostty also lives in scottames/ghostty as a dedicated COPR, but
-  # that COPR conflicts with avengemedia/danklinux's ghostty (different
-  # patchsets, both ship ghostty). With BOTH enabled dnf5 refuses to
-  # resolve the install on a fresh box — an earlier run on a VM dropped
-  # ghostty entirely for that reason. We rely on danklinux's copy; if
-  # that COPR ever stops shipping ghostty, re-enable scottames/ghostty
-  # AND audit for conflicts with danklinux before re-enabling.
 ]
 # Plymouth DeviceScale
 # Plymouth's script.so plugin exposes only Window.GetWidth/Height
@@ -163,6 +158,11 @@ required = [
 [packages.apps]
 # Official Fedora unless marked.
 required = [
+  # Shells / prompts
+  "zsh",
+  "zsh-syntax-highlighting",
+  "zsh-autosuggestions",
+  "starship",
   # Files / viewing
   "krita",
   "libreoffice",
@@ -237,8 +237,12 @@ required = [
   "codium",
   # KVM/libvirt stack — pulled in as the @virtualization dnf5 group
   # (libvirt-daemon, qemu-kvm, virt-install, virt-manager, etc.). The
-  # libvirtd.service unit fires on first boot via [services].enable.
   "@virtualization",
+  # glibc-langpack-* — locale / charset data for all supported languages.
+  # The wildcard installs every glibc-langpack subpackage so LibreOffice,
+  # KDE apps, and other locale-aware software have translated UI strings
+  # and correct formatting (dates, numbers, sort order) out of the box.
+  "glibc-langpack-*",
 ]
 # ── Vendored source builds ─────────────────────────────────────────────────────
 # (Empty — all greeter/shell binaries now come from prebuilt Fedora + COPR

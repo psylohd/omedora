@@ -48,6 +48,7 @@ declare -A TWEAK_FN=(
   [hyprland-plugins]=tweak_hyprland_plugins
   [wallpapers]=tweak_wallpapers
   [hyprcapture]=tweak_hyprcapture
+  [zsh]=tweak_zsh
 )
 declare -A TWEAK_DESC=(
   [plymouth]="Plymouth omedora theme (script module)"
@@ -60,8 +61,8 @@ declare -A TWEAK_DESC=(
   [services]="systemctl enable + set-default graphical.target"
   [flatpak]="Install Flatpaks from [flatpak] + refresh desktop-database cache"
   [hyprland-plugins]="Clone Lua plugins to ~/.config/hypr/plugins/"
-  [wallpapers]="Copy repo wallpapers/ → $HOME/Pictures/wallpapers/"
   [hyprcapture]="hyprpm add HyprCapture + build .so + install helper"
+  [zsh]="Set user shell to zsh + patch ~/.zshrc with extensions"
 )
 
 list_tweaks() {
@@ -82,8 +83,6 @@ source "${SCRIPT_DIR}/lib/stage-dnf.sh"
 source "${SCRIPT_DIR}/lib/stage-configs.sh"
 source "${SCRIPT_DIR}/lib/stage-userdirs.sh"
 source "${SCRIPT_DIR}/lib/stage-services.sh"
-source "${SCRIPT_DIR}/lib/stage-keyring.sh"
-source "${SCRIPT_DIR}/lib/stage-configs.sh"
 source "${SCRIPT_DIR}/lib/stage-flatpak.sh"
 source "${SCRIPT_DIR}/lib/stage-hyprland-plugins.sh"
 source "${SCRIPT_DIR}/lib/stage-wallpapers.sh"
@@ -111,11 +110,12 @@ tweak_dms() {
 }
 tweak_keyring()    { section "tweak: keyring";    stage_keyring; }
 tweak_wallpapers()  { section "tweak: wallpapers"; stage_wallpapers; }
+tweak_userdirs()   { section "tweak: userdirs";   stage_user_dirs; }
 tweak_services()   { section "tweak: services";   stage_services; }
 tweak_flatpak()    { section "tweak: flatpak";    stage_flatpak; }
 tweak_hyprland_plugins() { section "tweak: hyprland-plugins"; stage_hyprland_plugins; }
 tweak_hyprcapture()  { section "tweak: hyprcapture"; stage_hyprcapture; }
-
+tweak_zsh()        { section "tweak: zsh";        stage_zsh; }
 # ── --diff: preview what the tweak would do (no writes) ──────────────────────
 # Currently a stub: each stage would need to support --dry-run. Today this
 # falls back to "all config files would be overwritten with .bak backups."
