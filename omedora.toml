@@ -171,7 +171,6 @@ required = [
   "gnome-calculator",
   "gnome-contacts",
   "gnome-software",
-  "gnome-papers",
   "snapshot",
   "simple-scan",
   "loupe",                          # GNOME image viewer
