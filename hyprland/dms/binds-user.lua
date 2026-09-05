@@ -102,12 +102,11 @@ local apps = {
 	{"SUPER + K",           scrPath .. "/omarchy-menu-keybindings-minimal",          "Keybindings cheatsheet"},
 }
 
--- HyprCapture overlay bind. The plugin exposes a dispatcher-builder
 hl.bind("Print", function()
 	if hl.plugin and hl.plugin.hyprcapture and hl.plugin.hyprcapture.open then
-		hl.dispatch(hl.plugin.hyprcapture.open())
+		return hl.plugin.hyprcapture.open()
 	else
-		hl.dsp.exec_cmd("hyprcapture-ui --mode region")
+		return hl.dsp.exec_cmd("hyprcapture-ui --mode region")
 	end
 end, { description = "HyprCapture screenshot overlay (region)" })
 for _, entry in ipairs(apps) do
