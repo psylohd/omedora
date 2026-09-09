@@ -2,147 +2,133 @@
 # hyprpm and wire its Lua config block into ~/.config/hypr/hyprland.lua.
 #
 # HyprCapture is a hyprpm-style plugin: `hyprpm add <repo>` clones the source
-# tree, runs CMake, installs the resulting .so into the Hyprland plugin dir,
-# and installs the Qt helper `hyprcapture-ui` into ~/.local/bin/. HyprCapture
-# then exposes its captures/recordings via Lua functions (hl.plugin.hyprcapture.*)
-# and a keybind helper. We bind it to Print on install.
+# tree, runs CMake, and exposes captures/recordings via Lua functions
+# (hl.plugin.hyprcapture.*). We bind it to Print in hyprland/dms/binds-user.lua.
+#
+# Runs everything inline: install build deps, pre-create the hyprpm cache
+# dir, run hyprpm add + enable + reload as the target user, reload Hyprland.
+# No post-install script for the user to run separately — when this stage
+# finishes, Print is live. Safe to re-run.
 
-# ─── Why a post-install script, not an immediate service ─────────────────────
-# hyprpm has three runtime requirements that are NOT satisfiable at install
-# time on a fresh box:
-#
-#   1. Live Hyprland instance. hyprpm reads the running compositor's
-#      version (via the Hyprland IPC socket) to validate plugin ABI
-#      headers. On a fresh install, Hyprland hasn't started yet.
-#
-#   2. XDG_RUNTIME_DIR. hyprpm writes its state to $XDG_RUNTIME_DIR/hyprpm/.
-#      Logind creates /run/user/<uid> on first login; on a fresh install
-#      this dir doesn't exist. hyprpm errors with "XDG_RUNTIME_DIR not set!".
-#
-#   3. Write access to /var/cache/hyprpm/<user>/. We pre-create this dir
-#      with mode 1777 so hyprpm's clone operations succeed without escalation.
-#
-# To satisfy all three, this stage ships a post-install script the user
-# runs manually after their first Hyprland boot. The script is idempotent —
-# safe to re-run if the first attempt failed.
-#
-# ─── What this stage does ───────────────────────────────────────────────────
-#   - Installs build deps + hyprpm binary (via dnf).
-#   - Pre-creates /var/cache/hyprpm/<user>/ with mode 1777 (sticky, writable
-#     by user) so hyprpm's first-add clone succeeds without escalation.
-#   - Ships ~/.local/share/omedora/install-hyprcapture.sh — the user runs
-#     this manually after first Hyprland boot.
-#
-# ─── Idempotency ────────────────────────────────────────────────────────────
-# - `tweaks.sh hyprcapture` re-applies this stage; it overwrites the script.
-# - hyprpm's own `add` is idempotent (errors on duplicate and the script
-#   treats that as success).
-# - If the user already has HyprCapture installed, hyprpm add errors but
-#   the script continues and subsequent hyprpm commands are no-ops.
-#
-# ─── Failure handling ──────────────────────────────────────────────────────
-# - If the script fails, the user can re-run `tweaks.sh hyprcapture`
-#   or run it manually: bash ~/.local/share/omedora/install-hyprcapture.sh
+# HyprCapture installer logic, factored out so we can keep the if/then/fi
+# structure clean. Reads URL from $HYCAPTURE_URL env var; needs
+# HYPRLAND_INSTANCE_SIGNATURE, XDG_RUNTIME_DIR, HOME set in the env too.
+_hc_install() {
+  set -e
+  url="$HYCAPTURE_URL"
+  yes | hyprpm remove HyprCapture 2>/dev/null || true
+  yes | hyprpm add -f "$url"
+  # Brief pause: hyprpm's `add` writes the plugin to its in-memory list
+  # and to state.toml; `enable` reads the manifest back from the cloned
+  # source tree. Back-to-back invocations race and `enable` reports
+  # "Couldn't enable plugin (missing?)" because the source dir hasn't
+  # been scanned yet. ~0.5s is enough in practice on NVMe.
+  sleep 0.5
+  hyprpm enable HyprCapture
+  hyprpm reload
+}
 stage_hyprcapture() {
-  section "hyprpm: HyprCapture compositor plugin"
-  require_root
 
   local repo_url="${OMEDORA_HYPRCAPTURE_REPO_URL}"
-
   if [[ -z "${repo_url}" ]]; then
     info "hyprpm disabled (empty hyprcapture.repo_url)"
     return 0
   fi
 
-  # Toolchain sanity (root context — /usr/bin paths are uid-independent).
-  local missing=()
-  for tool in hyprpm cmake git; do
-    if ! command -v "${tool}" >/dev/null 2>&1; then
-      missing+=("${tool}")
+  # Toolchain sanity. hyprland-devel / hyprlang-devel come from
+  # [packages.hyprland].build in omedora.toml; everything else for the
+  # HyprCapture plugin build is listed below and matches its CMakeLists.txt
+  # pkg_check_modules calls.
+  local missing_pkgs=()
+  local pkg
+  for pkg in hyprpm cmake git \
+             hyprland-devel hyprlang-devel hyprwayland-scanner \
+             qt6-qtbase-devel qt6-qtsvg-devel layer-shell-qt-devel \
+             pulseaudio-libs-devel pipewire-devel \
+             libavformat-free-devel libavcodec-free-devel \
+             libavutil-free-devel libswresample-free-devel \
+             fftw-devel lua-devel glib2-devel nlohmann-json-devel; do
+    if ! rpm -q "${pkg}" >/dev/null 2>&1; then
+      missing_pkgs+=("${pkg}")
     fi
   done
-  if [[ ${#missing[@]} -gt 0 ]]; then
-    die "missing hyprpm build deps: ${missing[*]} (stage_dnf should have installed these)"
+  if [[ ${#missing_pkgs[@]} -gt 0 ]]; then
+    info "installing missing build deps: ${missing_pkgs[*]}"
+    dnf install -y "${missing_pkgs[@]}" || die "failed to install build deps"
   fi
 
   local target_user="${OMEDORA_TARGET_USER}"
   local user_home
   user_home="$(getent passwd "${target_user}" | cut -d: -f6)"
   [[ -n "${user_home}" ]] || die "user '${target_user}' not found on this system"
+  local target_uid
+  target_uid="$(id -u "${target_user}")"
 
   # Pin handling: "<url>|<branch>|<commit>" — same shape as hyprland_plugins.
-  local url="${repo_url}" branch="${OMEDORA_HYPRCAPTURE_BRANCH}" commit="${OMEDORA_HYPRCAPTURE_COMMIT}"
+  local url branch commit
+  url="${repo_url}"
+  branch="${OMEDORA_HYPRCAPTURE_BRANCH}"
+  commit="${OMEDORA_HYPRCAPTURE_COMMIT}"
   if [[ "${repo_url}" == *"|"* ]]; then
     IFS='|' read -r url branch commit <<<"${repo_url}"
   fi
 
-  # ── Pre-create /var/cache/hyprpm/<user>/ ───────────────────────────────────
-  # hyprpm clones plugin repos into this dir. hyprpm's internal sudo mkdir
-  # for the first plugin is blocked by !visiblepw on headless installs, so we
-  # pre-create the dir as root with sticky-bit 1777 so the user can write
-  # subdirs (hyprpm's clone targets) without needing any escalation.
+  # Pre-create /var/cache/hyprpm/<user>/ owned by the target user with
+  # mode 1777. hyprpm's internal sudo mkdir is blocked by !visiblepw on
+  # headless installs, and pre-creating as root with a different owner
+  # leaves root-owned build artifacts that future `hyprpm remove` calls
+  # can't clean up. Owning the dir from the start lets hyprpm write
+  # inside without escalation and clean up after itself.
   local hyprpm_cache="/var/cache/hyprpm/${target_user}"
-  install -d -m 1777 "${hyprpm_cache}"
-  chown -R "${target_user}:${target_user}" "${hyprpm_cache}"
+  install -d -m 1777 -o "${target_user}" -g "${target_user}" "${hyprpm_cache}"
 
-  # ── Drop the post-install script ────────────────────────────────────────────
-  # A standalone bash script the user runs manually after first Hyprland boot.
-  # hyprpm needs XDG_RUNTIME_DIR + Hyprland IPC socket, both only available
-  # after Hyprland is running. The script is idempotent — safe to re-run.
-  local script="${user_home}/.local/share/omedora/install-hyprcapture.sh"
-  install -d -m 0755 -o "${target_user}" -g "${target_user}" \
-    "$(dirname "${script}")"
-  cat > "${script}" <<SH
-#!/bin/bash
-# ~/.local/share/omedora/install-hyprcapture.sh
-#
-# Installs HyprCapture via hyprpm. Run manually after your first Hyprland
-# boot (hyprpm needs the Hyprland IPC socket).
-#
-#   bash ~/.local/share/omedora/install-hyprcapture.sh
-#
-# Idempotent — safe to re-run if the first attempt failed.
+  # Discover the live Hyprland instance signature. The signature is a
+  # per-session var that lives in the env of Hyprland's child processes
+  # (Xwayland, dms) but isn't exported by any login profile — so we
+  # derive it from /run/user/<uid>/hypr/, where each subdir is one live
+  # instance. hyprpm and hyprctl need this set to find the IPC socket.
+  local hypr_signature=""
+  local hypr_dir
+  for hypr_dir in "/run/user/${target_uid}/hypr"/*/; do
+    [[ -d "${hypr_dir}" ]] || continue
+    hypr_signature="$(basename "${hypr_dir}")"
+    break
+  done
+  if [[ -z "${hypr_signature}" ]]; then
+    die "no live Hyprland instance found for ${target_user} — log in to a graphical session first"
+  fi
 
-set -eo pipefail
+  # Run the hyprpm sequence as the target user. `runuser -l` sources the
+  # user's login profile for $PATH; HYPRLAND_INSTANCE_SIGNATURE,
+  # XDG_RUNTIME_DIR, and the URL are passed explicitly via `env`. We
+  # source `_hc_install` (defined above) into the user's bash, then
+  # call it. This keeps the if/then/fi structure of stage_hyprcapture
+  # simple and avoids the heredoc-inside-if parsing pitfalls.
+  info "installing HyprCapture as ${target_user} (url=${url}, instance=${hypr_signature})"
+  if ! runuser -u "${target_user}" -- env \
+        "HYPRLAND_INSTANCE_SIGNATURE=${hypr_signature}" \
+        "XDG_RUNTIME_DIR=/run/user/${target_uid}" \
+        "HOME=${user_home}" \
+        "HYCAPTURE_URL=${url}" \
+        bash -l -c "$(declare -f _hc_install); _hc_install"; then
+    die "HyprCapture install failed — see output above"
+  fi
 
-URL='${url}'
-BRANCH='${branch}'
-COMMIT='${commit}'
-NAME="\$(basename "\${URL}" .git)"
+  # Reload Hyprland so the freshly enabled plugin's Lua hooks are visible
+  # to binds-user.lua on the next config load. hyprctl needs the same
+  # env vars as hyprpm.
+  if ! runuser -u "${target_user}" -- env \
+        "HYPRLAND_INSTANCE_SIGNATURE=${hypr_signature}" \
+        "XDG_RUNTIME_DIR=/run/user/${target_uid}" \
+        "HOME=${user_home}" \
+        hyprctl reload; then
+    warn "hyprctl reload failed (manual reload needed: SUPER+R)"
+  fi
 
-# ── Build dep check ────────────────────────────────────────────────────────────
-# HyprCapture's screenshot UI needs Qt6 (qtbase + qtsvg). Install via sudo
-# if missing; if sudo fails, warn but continue — the plugin .so may still build.
-for pkg in qt6-qtbase-devel qt6-qtsvg-devel layer-shell-qt-devel; do
-    if ! rpm -q "$pkg" >/dev/null 2>&1; then
-        echo "[omedora] $pkg not found — installing..."
-        sudo dnf install -y "$pkg" || echo "[omedora] $pkg install failed"
-    fi
-done
-
-# Remove any previous broken install so hyprpm add -f can re-clone fresh.
-echo "[omedora] hyprpm remove \${NAME} (if exists)"
-yes | hyprpm remove "\${NAME}" 2>/dev/null || true
-
-# Pipe yes to auto-confirm the trust prompt.
-# --force (-f) re-clones and rebuilds from scratch.
-echo "[omedora] hyprpm add -f \${URL}"
-yes | hyprpm add -f "\${URL}" || true
-
-echo "[omedora] hyprpm reload"
-hyprpm reload || true
-
-echo "[omedora] HyprCapture installed."
-SH
-  chmod 0755 "${script}"
-  chown "${target_user}:${target_user}" "${script}"
-
-  info "HyprCapture stage complete."
-  info "Run this after your first Hyprland boot:"
-  info "  bash ~/.local/share/omedora/install-hyprcapture.sh"
+  info "HyprCapture installed and enabled. Print key opens the screenshot overlay."
 }
 
-# tweak_hyprcapture — re-apply the post-install script. Safe to re-run.
+# tweak_hyprcapture — re-apply the install. Safe to re-run.
 tweak_hyprcapture() {
   section "tweak: hyprpm HyprCapture"
   stage_hyprcapture

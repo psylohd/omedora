@@ -46,8 +46,20 @@ for i in "${!args[@]}"; do
   fi
 done
 
+# If the default is dms-open (DMS URL picker) and no URL was passed, the
+# dms-open handler has nothing to open and exits with an error. Bypass it and
+# launch the configured browser (Zen) directly via flatpak.
+if [[ "${app_id}" == "dms-open" && ${#args[@]} -eq 0 ]]; then
+  if [[ -f /var/lib/flatpak/exports/share/applications/app.zen_browser.zen.desktop ]]; then
+    flatpak run app.zen_browser.zen &
+  else
+    notify-send -a "hyprland" -u critical "Zen Browser not found" "The Zen Browser flatpak is not installed."
+  fi
+  exit 0
+fi
+
 if $is_flatpak; then
   flatpak run "${app_id}" "${args[@]}" &
 else
-  exec "${desktop_file}" "${args[@]}"
+  gtk-launch "${app_id}" "${args[@]}" &
 fi

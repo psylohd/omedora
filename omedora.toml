@@ -106,6 +106,32 @@ build = [
   "qt6-qtbase-devel",
   "qt6-qtsvg-devel",
   "layer-shell-qt-devel",
+  # HyprCapture (hyprpm plugin) additional build deps discovered from
+  # upstream CMakeLists.txt pkg_check_modules calls:
+  #   libpulse     → pulseaudio-libs-devel  (audio capture)
+  #   libpipewire  → pipewire-devel        (PipeWire audio path)
+  #   libavformat/libavcodec/libavutil + libswresample → ffmpeg-devel
+  #   fftw3        → fftw-devel            (AEC noise suppression)
+  #   lua          → lua-devel             (scripting binding)
+  #   gio-2.0/gio-unix-2.0 → glib2-devel    (D-Bus / file dialog helpers)
+  # Without these, `hyprpm add HyprCapture` fails cmake-configure with
+  # "The following required packages were not found" and Print silently
+  # does nothing because the .so is never built.
+  #
+  # ffmpeg note: rpmfusion's `ffmpeg-devel` collides with Fedora's
+  # `libswscale-free` (multilib-mismatched versions). Use the libre
+  # variants which ship the same pkg-config files (`libavformat.pc`,
+  # `libavcodec.pc`, `libavutil.pc`, `libswresample.pc`) HyprCapture's
+  # CMake asks for, and don't fight rpmfusion for libswscale.
+  "pulseaudio-libs-devel",
+  "pipewire-devel",
+  "libavformat-free-devel",
+  "libavcodec-free-devel",
+  "libavutil-free-devel",
+  "libswresample-free-devel",
+  "fftw-devel",
+  "lua-devel",
+  "glib2-devel",
   "ffmpeg",
   "libnotify",
 ]
@@ -243,6 +269,7 @@ required = [
   # KDE apps, and other locale-aware software have translated UI strings
   # and correct formatting (dates, numbers, sort order) out of the box.
   "glibc-langpack-*",
+  "google-noto-*"
 ]
 # ── Vendored source builds ─────────────────────────────────────────────────────
 # (Empty — all greeter/shell binaries now come from prebuilt Fedora + COPR

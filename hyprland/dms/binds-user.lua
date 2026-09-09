@@ -102,13 +102,21 @@ local apps = {
 	{"SUPER + K",           scrPath .. "/omarchy-menu-keybindings-minimal",          "Keybindings cheatsheet"},
 }
 
-hl.bind("Print", function()
-	if hl.plugin and hl.plugin.hyprcapture and hl.plugin.hyprcapture.open then
-		return hl.plugin.hyprcapture.open()
-	else
-		return hl.dsp.exec_cmd("hyprcapture-ui --mode region")
-	end
-end, { description = "HyprCapture screenshot overlay (region)" })
+-- Some keyboards emit Linux KEY_PRINT (XKB `I218`) rather than the
+-- traditional PrintScreen key (XKB `PRSC`). Keep both forms bound; this
+-- avoids relying on the keysym produced by a device-specific firmware map.
+-- Use --overlay-scope all so the region overlay spans the entire desktop.
+-- With split-monitor-workspaces loaded the keyboard lives on DP-3 and
+-- `active` always resolves to that monitor, leaving HDMI-A-1 unsupported.
+-- `all` makes the overlay cover both outputs so the larger monitor can
+-- be captured regardless of which workspace holds the focused window.
+local function hyprcapture_dispatcher()
+	return hl.dsp.exec_cmd(
+		"/home/intox/.local/bin/hyprcapture-ui --mode region --overlay-scope all"
+	)
+end
+hl.bind("Print", hyprcapture_dispatcher(), { description = "HyPrCapture screenshot overlay (region)" })
+
 for _, entry in ipairs(apps) do
 	hl.bind(entry[1], hl.dsp.exec_cmd(entry[2]), { description = entry[3] })
 end

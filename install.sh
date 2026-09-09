@@ -187,7 +187,12 @@ run_stage greetd     stage_greetd       # wire /etc/greetd/config.toml + start-h
 run_stage configs    stage_configs      # plymouth + hyprland + quickshell in one pass
 run_stage dms        stage_dms          # DankMaterialShell config + plugins
 run_stage hyprland-plugins stage_hyprland_plugins  # clone Lua plugins to ~/.config/hypr/plugins/
-run_stage hyprcapture stage_hyprcapture  # hyprpm add HyprCapture + build .so + helper
+# run_stage hyprcapture stage_hyprcapture
+#   Skipped on first install. HyprCapture needs a live Hyprland session
+#   (hyprpm add reads $HYPRLAND_INSTANCE_SIGNATURE for header validation),
+#   which only exists AFTER the user's first graphical login. Run after
+#   boot: `sudo ./tweaks.sh hyprcapture`. The Print key falls back to
+#   `hyprshot -m region` until then — see hyprland/dms/binds-user.lua.
 run_stage keyring    stage_keyring      # GNOME keyring auto-unlock at greetd login
 run_stage userdirs   stage_user_dirs    # default XDG dirs + custom dev/projects/programs
 run_stage services   stage_services
@@ -200,6 +205,9 @@ Next steps:
   2. Greetd → dms-greeter → Hyprland → dms via exec-once.
   3. If Plymouth doesn't load: dracut -f --regenerate-all
   4. To re-run only a stage:  sudo ./install.sh --only dnf
+  5. Install HyprCapture (screenshot plugin):  sudo ./tweaks.sh hyprcapture
+     Skipped on first install — hyprpm needs a live Hyprland session.
+     Until then, Print key uses a `hyprshot -m region` fallback.
 
 All installed files live under:
   /usr/share/plymouth/themes/omedora
