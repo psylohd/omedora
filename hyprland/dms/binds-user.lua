@@ -54,9 +54,7 @@ local conflicts = {
 	"SUPER + E",
 	"SUPER + B",
 	"SUPER + M",
-	"SUPER + SPACE",
 	"SUPER + CTRL + SPACE",
-	"SUPER + K",
 	-- Workspace focus + send-window (we redefine all 10)
 	"SUPER + 1", "SUPER + 2", "SUPER + 3", "SUPER + 4", "SUPER + 5",
 	"SUPER + 6", "SUPER + 7", "SUPER + 8", "SUPER + 9", "SUPER + 0",
@@ -96,7 +94,6 @@ local apps = {
 	{"SUPER + SHIFT + F",   "nautilus",                                              "File manager (open)"},
 	{"SUPER + E",           scrPath .. "/omarchy-launch-or-focus thunar thunar",     "File manager (launch-or-focus)"},
 	{"SUPER + B",           scrPath .. "/omarchy-launch-browser",                    "Browser (xdg default)"},
-	{"SUPER + M",           "dms ipc call spotlight focusOrToggle",                  "Spotlight (focus)"},
 	{"SUPER + SPACE",       "dms ipc call spotlight toggle",                         "Spotlight (toggle)"},
 	{"SUPER + CTRL + SPACE","dms ipc call wallpaperCarousel toggle",                 "Wallpaper carousel"},
 	{"SUPER + K",           scrPath .. "/omarchy-menu-keybindings-minimal",          "Keybindings cheatsheet"},
@@ -165,7 +162,10 @@ end
 
 -- ── 5. Window management ────────────────────────────────────────────────────
 hl.bind("SUPER + Q", hl.dsp.window.close(), { description = "Close window" })
-hl.bind("SUPER + W", hl.dsp.window.close(), { description = "Close window" })
+hl.bind("SUPER + W",
+	hl.dsp.exec_cmd(scrPath .. "/omarchy-hyprland-workspace-layout-toggle"),
+	{ description = "Toggle dwindle/scrolling layout" }
+)
 hl.bind("SUPER + T",
 	hl.dsp.window.float({ action = "toggle" }),
 	{ description = "Toggle floating" }
@@ -179,11 +179,14 @@ hl.bind("SUPER + V",
 	{ description = "Toggle floating (V alias)" }
 )
 -- ── 6. Layout / display ─────────────────────────────────────────────────────
-hl.bind("SUPER + L",
+hl.bind("SUPER + M",
 	hl.dsp.exec_cmd(scrPath .. "/omarchy-hyprland-workspace-layout-toggle"),
 	{ description = "Toggle dwindle/scrolling layout" }
 )
--- Layout toggle bound to SUPER + L only.
+hl.bind("SUPER + L",
+	hl.dsp.exec_cmd("hyprlock"),
+	{ description = "Lock screen" }
+)
 --
 -- ── 8. Mouse-drag rearrange (SUPER + LMB) ───────────────────────────────────
 -- Hyprland's `window.drag()` keeps the window tiled and reflows the
