@@ -261,3 +261,58 @@ hl.bind("SUPER + equal",
 	end,
 	{ description = "Restore most recently minimized window" }
 )
+-- ═══════════════════════════════════════════════════════════════════════════
+-- § 10. Media keys — brightness, volume, playback
+-- ═══════════════════════════════════════════════════════════════════════════
+-- These use bare keysyms (no SUPER modifier) so they work without any prefix.
+-- brightnessctl no-ops gracefully on machines with no backlight.
+-- pactl drives the default PulseAudio/PipeWire sink.
+-- playerctl targets whichever media player is active (spotify, firefox, etc.).
+
+-- ── Brightness (laptop panel) ──────────────────────────────────────────────
+-- brightnessctl exits 0 when there's no backlight (desktop), so the
+-- || true guards against any device-access failure on any machine.
+hl.bind("XF86MonBrightnessUp",
+	hl.dsp.exec_cmd("brightnessctl set +5% || true"),
+	{ description = "Increase screen brightness" }
+)
+hl.bind("XF86MonBrightnessDown",
+	hl.dsp.exec_cmd("brightnessctl set 5%- || true"),
+	{ description = "Decrease screen brightness" }
+)
+
+-- ── Volume ───────────────────────────────────────────────────────────────────
+hl.bind("XF86AudioRaiseVolume",
+	hl.dsp.exec_cmd("pactl set-sink-volume @DEFAULT_SINK@ +5%"),
+	{ description = "Raise volume 5%" }
+)
+hl.bind("XF86AudioLowerVolume",
+	hl.dsp.exec_cmd("pactl set-sink-volume @DEFAULT_SINK@ -5%"),
+	{ description = "Lower volume 5%" }
+)
+hl.bind("XF86AudioMute",
+	hl.dsp.exec_cmd("pactl set-sink-mute @DEFAULT_SINK@ toggle"),
+	{ description = "Toggle mute" }
+)
+
+-- ── Media playback ──────────────────────────────────────────────────────────
+hl.bind("XF86AudioPlay",
+	hl.dsp.exec_cmd("playerctl play-pause"),
+	{ description = "Play / pause" }
+)
+hl.bind("XF86AudioPause",
+	hl.dsp.exec_cmd("playerctl pause"),
+	{ description = "Pause" }
+)
+hl.bind("XF86AudioNext",
+	hl.dsp.exec_cmd("playerctl next"),
+	{ description = "Next track" }
+)
+hl.bind("XF86AudioPrevious",
+	hl.dsp.exec_cmd("playerctl previous"),
+	{ description = "Previous track" }
+)
+hl.bind("XF86AudioStop",
+	hl.dsp.exec_cmd("playerctl stop"),
+	{ description = "Stop playback" }
+)
