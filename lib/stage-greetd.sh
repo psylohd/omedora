@@ -68,7 +68,7 @@ stage_greetd() {
   # read. pkexec with polkit approval (user in wheel group) avoids needing
   # any password or NOPASSWD sudoers entry.
   info "syncing DMS theme/wallpaper to greeter"
-  if pkexec --user root --disable-internal-agent dms-greeter sync -y \
+  if DMS_PRIVESC="${privesc}" pkexec --user root --disable-internal-agent dms-greeter sync -y \
        2>&1 | sed 's/^/  /'; then
     info "dms-greeter sync complete"
   else

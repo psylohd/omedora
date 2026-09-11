@@ -17,15 +17,8 @@ _hc_install() {
   set -e
   url="$HYCAPTURE_URL"
   yes | hyprpm remove HyprCapture 2>/dev/null || true
+  yes | hyprpm update
   yes | hyprpm add -f "$url"
-  # Brief pause: hyprpm's `add` writes the plugin to its in-memory list
-  # and to state.toml; `enable` reads the manifest back from the cloned
-  # source tree. Back-to-back invocations race and `enable` reports
-  # "Couldn't enable plugin (missing?)" because the source dir hasn't
-  # been scanned yet. ~0.5s is enough in practice on NVMe.
-  sleep 0.5
-  hyprpm enable HyprCapture
-  hyprpm reload
 }
 stage_hyprcapture() {
 
