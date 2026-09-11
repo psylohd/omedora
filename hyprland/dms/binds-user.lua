@@ -162,10 +162,6 @@ end
 
 -- ── 5. Window management ────────────────────────────────────────────────────
 hl.bind("SUPER + Q", hl.dsp.window.close(), { description = "Close window" })
-hl.bind("SUPER + W",
-	hl.dsp.exec_cmd(scrPath .. "/omarchy-hyprland-workspace-layout-toggle"),
-	{ description = "Toggle dwindle/scrolling layout" }
-)
 hl.bind("SUPER + T",
 	hl.dsp.window.float({ action = "toggle" }),
 	{ description = "Toggle floating" }
@@ -178,13 +174,17 @@ hl.bind("SUPER + V",
 	hl.dsp.window.float({ action = "toggle" }),
 	{ description = "Toggle floating (V alias)" }
 )
+hl.bind("SUPER + W",
+	hl.dsp.exec_cmd(""),
+	{ description = "(unbound)" }
+)
 -- ── 6. Layout / display ─────────────────────────────────────────────────────
 hl.bind("SUPER + M",
 	hl.dsp.exec_cmd(scrPath .. "/omarchy-hyprland-workspace-layout-toggle"),
 	{ description = "Toggle dwindle/scrolling layout" }
 )
 hl.bind("SUPER + L",
-	hl.dsp.exec_cmd("hyprlock"),
+	hl.dsp.exec_cmd("loginctl lock-session"),
 	{ description = "Lock screen" }
 )
 --
