@@ -17,6 +17,7 @@
 #   sudo ./tweaks.sh quickshell          # redeploy ~/.config/quickshell/
 #   sudo ./tweaks.sh dms                 # redeploy DankMaterialShell config + plugins
 #   sudo ./tweaks.sh services            # systemctl enable + set-default
+#   sudo ./tweaks.sh shell             # install fish, set as shell, add starship
 #   sudo ./tweaks.sh --list              # same as no args
 #   sudo ./tweaks.sh --diff <name>       # show what would change vs current state
 #   sudo ./tweaks.sh --revert <name>     # restore .bak.<date> backups for a tweak
@@ -48,7 +49,7 @@ declare -A TWEAK_FN=(
   [hyprland-plugins]=tweak_hyprland_plugins
   [wallpapers]=tweak_wallpapers
   [hyprcapture]=tweak_hyprcapture
-  [zsh]=tweak_zsh
+  [shell]=tweak_shell
 )
 declare -A TWEAK_DESC=(
   [plymouth]="Plymouth omedora theme (script module)"
@@ -62,7 +63,7 @@ declare -A TWEAK_DESC=(
   [flatpak]="Install Flatpaks from [flatpak] + refresh desktop-database cache"
   [hyprland-plugins]="Clone Lua plugins to ~/.config/hypr/plugins/"
   [hyprcapture]="hyprpm add HyprCapture + build .so + install helper"
-  [zsh]="Set user shell to zsh + patch ~/.zshrc with extensions"
+  [shell]="Install fish, set as user shell, configure starship in fish"
 )
 
 list_tweaks() {
@@ -87,7 +88,7 @@ source "${SCRIPT_DIR}/lib/stage-flatpak.sh"
 source "${SCRIPT_DIR}/lib/stage-hyprland-plugins.sh"
 source "${SCRIPT_DIR}/lib/stage-wallpapers.sh"
 source "${SCRIPT_DIR}/lib/stage-hyprcapture.sh"
-source "${SCRIPT_DIR}/lib/detect-monitors.sh"
+source "${SCRIPT_DIR}/lib/stage-shell.sh"
 
 tweak_plymouth()   { section "tweak: plymouth";   stage_config_plymouth; }
 tweak_hyprland()   {
@@ -115,7 +116,7 @@ tweak_services()   { section "tweak: services";   stage_services; }
 tweak_flatpak()    { section "tweak: flatpak";    stage_flatpak; }
 tweak_hyprland_plugins() { section "tweak: hyprland-plugins"; stage_hyprland_plugins; }
 tweak_hyprcapture()  { section "tweak: hyprcapture"; stage_hyprcapture; }
-tweak_zsh()        { section "tweak: zsh";        stage_zsh; }
+tweak_shell()     { section "tweak: shell";     stage_shell; }
 # ── --diff: preview what the tweak would do (no writes) ──────────────────────
 # Currently a stub: each stage would need to support --dry-run. Today this
 # falls back to "all config files would be overwritten with .bak backups."

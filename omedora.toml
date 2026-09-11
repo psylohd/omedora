@@ -47,6 +47,11 @@ enable = [
 [plymouth]
 device_scale = 0
 
+# ── Shell (fish + starship) ────────────────────────────────────────────────────
+# Install fish, set as user shell, configure starship prompt in fish config.
+[shell]
+enable = true
+
 # ── External repos (non-COPR) ───────────────────────────────────────────────────
 # Each entry is a URL to a .repo file fetched by dnf5 config-manager addrepo.
 # Docker CE is the only current use; the installer adds the repo then installs
@@ -185,9 +190,6 @@ required = [
 # Official Fedora unless marked.
 required = [
   # Shells / prompts
-  "zsh",
-  "zsh-syntax-highlighting",
-  "zsh-autosuggestions",
   "starship",
   # Files / viewing
   "krita",

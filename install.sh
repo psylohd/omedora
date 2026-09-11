@@ -73,7 +73,7 @@ done
 # ── Load config + helpers ─────────────────────────────────────────────────────
 source "${SCRIPT_DIR}/lib/parser.sh"
 source "${SCRIPT_DIR}/lib/self-check.sh"
-for _stage in copr dnf flatpak configs greetd dms keyring userdirs services libvirt hyprland-plugins hyprcapture wallpapers; do
+for _stage in copr dnf flatpak configs greetd dms keyring userdirs services libvirt hyprland-plugins hyprcapture wallpapers shell; do
   source "${SCRIPT_DIR}/lib/stage-${_stage}.sh"
 done
 
@@ -161,7 +161,7 @@ echo "  target user: ${OMEDORA_TARGET_USER}"
 echo "  greeter:     ${OMEDORA_GREETER_BACKEND}"
 echo "  repo root:   ${OMEDORA_REPO_ROOT}"
 echo "  config:      ${OMEDORA_CONFIG}"
-for s in copr dnf flatpak plymouth hyprland quickshell greetd dms keyring userdirs services hyprland-plugins hyprcapture wallpapers; do
+for s in copr dnf flatpak plymouth hyprland quickshell greetd dms keyring userdirs services hyprland-plugins hyprcapture wallpapers shell; do
   f="$(stage_flag_name "${s}")"
   v="${!f:-false}"
   if [[ "${s}" == "plymouth" ]] || \
@@ -198,6 +198,7 @@ run_stage userdirs   stage_user_dirs    # default XDG dirs + custom dev/projects
 run_stage services   stage_services
 run_stage libvirt    stage_libvirt
 run_stage wallpapers stage_wallpapers     # repo wallpapers/ → $HOME/Pictures/wallpapers/
+run_stage shell     stage_shell          # install fish, set as shell, add starship
 cat <<DONE
 
 Next steps:
