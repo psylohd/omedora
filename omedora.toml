@@ -54,8 +54,9 @@ enable = true
 
 # ── External repos (non-COPR) ───────────────────────────────────────────────────
 # Each entry is a URL to a .repo file fetched by dnf5 config-manager addrepo.
-# Docker CE is the only current use; the installer adds the repo then installs
-# the packages listed in [packages.docker].
+# Docker CE is installed via the docker-ce.repo; packages are listed in
+# [packages.docker]. Note: users are NOT added to the docker group — use
+# `docker run --privileged` or configure sudo rules for CLI access instead.
 [repos]
 enable = [
   "https://download.docker.com/linux/fedora/docker-ce.repo",

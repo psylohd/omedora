@@ -144,10 +144,10 @@ end
 -- surfaces for the same mutation made the layout "feel unpredictable"
 -- whenever a stray Shift modifier flipped it.
 local dirs = {
-	{ focus = "left",  arrow = "LEFT",  swap = "l" },
-	{ focus = "right", arrow = "RIGHT", swap = "r" },
-	{ focus = "up",    arrow = "UP",    swap = "u" },
-	{ focus = "down",  arrow = "DOWN",  swap = "d" },
+	{ focus = "left",  arrow = "LEFT" },
+	{ focus = "right", arrow = "RIGHT" },
+	{ focus = "up",    arrow = "UP" },
+	{ focus = "down",  arrow = "DOWN" },
 }
 for _, d in ipairs(dirs) do
 	hl.bind("SUPER + " .. d.arrow,
@@ -155,8 +155,8 @@ for _, d in ipairs(dirs) do
 		{ description = "Focus window " .. d.focus }
 	)
 	hl.bind("SUPER + SHIFT + " .. d.arrow,
-		hl.dsp.window.swap({ direction = d.swap }),
-		{ description = "Swap window " .. d.focus }
+		hl.dsp.exec_cmd("hyprctl dispatch movemonitor " .. d.focus),
+		{ description = "Move window to " .. d.focus .. " monitor" }
 	)
 end
 

@@ -119,7 +119,6 @@ apply_stage_filter() {
           # Pure-Lua Hyprland plugins (cloned to ~/.config/hypr/plugins/).
           printf -v "OMEDORA_STAGE_HYPRLAND_PLUGINS" "true" ;;
         hyprcapture)
-          printf -v "OMEDORA_STAGE_DNF" "true"
           printf -v "OMEDORA_STAGE_HYPRCAPTURE" "true" ;;
         wallpapers)
           # Pure file copy, no dependencies. Uses OMEDORA_PATH_WALLPAPERS.
@@ -187,38 +186,22 @@ run_stage greetd     stage_greetd       # wire /etc/greetd/config.toml + start-h
 run_stage configs    stage_configs      # plymouth + hyprland + quickshell in one pass
 run_stage dms        stage_dms          # DankMaterialShell config + plugins
 run_stage hyprland-plugins stage_hyprland_plugins  # clone Lua plugins to ~/.config/hypr/plugins/
-# run_stage hyprcapture stage_hyprcapture
-#   Skipped on first install. HyprCapture needs a live Hyprland session
-#   (hyprpm add reads $HYPRLAND_INSTANCE_SIGNATURE for header validation),
-#   which only exists AFTER the user's first graphical login. Run after
-#   boot: `sudo ./tweaks.sh hyprcapture`. The Print key falls back to
-#   `hyprshot -m region` until then — see hyprland/dms/binds-user.lua.
 run_stage keyring    stage_keyring      # GNOME keyring auto-unlock at greetd login
 run_stage userdirs   stage_user_dirs    # default XDG dirs + custom dev/projects/programs
 run_stage services   stage_services
-run_stage libvirt    stage_libvirt
 run_stage wallpapers stage_wallpapers     # repo wallpapers/ → $HOME/Pictures/wallpapers/
 run_stage shell     stage_shell          # install fish, set as shell, add starship
 cat <<DONE
 
 Next steps:
-  1. Reboot:   systemctl reboot
-  2. Greetd → dms-greeter → Hyprland → dms via exec-once.
-  3. If Plymouth doesn't load: dracut -f --regenerate-all
-  4. To re-run only a stage:  sudo ./install.sh --only dnf
-  5. Install HyprCapture (screenshot plugin):  sudo ./tweaks.sh hyprcapture
-     Skipped on first install — hyprpm needs a live Hyprland session.
-     Until then, Print key uses a `hyprshot -m region` fallback.
 
-All installed files live under:
-  /usr/share/plymouth/themes/omedora
-  /etc/greetd/config.toml       /usr/bin/start-hyprland
-  /usr/local/bin/{dms,dgop}
-  ~${OMEDORA_TARGET_USER}/.config/hypr/
-  ~${OMEDORA_TARGET_USER}/.config/quickshell/
+After the first graphical login, run this to finish setup:
 
-Backups of overwritten files have timestamped .bak.<date> suffixes.
+  ./postinstall.sh
+
+This syncs the greeter theme and installs HyprCapture.
 DONE
+
 
 # ── Auto-reboot ──────────────────────────────────────────────────────────────
 # Greetd is system-level and won't see its new /etc/greetd/config.toml + the

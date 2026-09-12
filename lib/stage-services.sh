@@ -14,16 +14,6 @@ stage_services() {
     return 0
   fi
 
-  # ── Docker group + user membership ──────────────────────────────────────────
-  if ! getent group docker >/dev/null 2>&1; then
-    info "creating docker group"
-    groupadd docker || warn "groupadd docker failed (continuing)"
-  fi
-  if [[ -n "${OMEDORA_TARGET_USER}" ]]; then
-    info "adding ${OMEDORA_TARGET_USER} to docker group"
-    usermod -aG docker "${OMEDORA_TARGET_USER}" \
-      || warn "usermod -aG docker ${OMEDORA_TARGET_USER} failed (continuing)"
-  fi
 
   # ── libvirt group + user membership ─────────────────────────────────────────
   # virt-manager and virsh talk to libvirtd over a UNIX socket whose ACL is
