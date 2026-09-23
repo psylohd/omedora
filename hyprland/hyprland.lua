@@ -233,12 +233,12 @@ local config_dir  = script_path:match("(.+)/[^/]+$") or "."
 package.path = config_dir .. "/?.lua;" .. config_dir .. "/?/init.lua;" .. package.path
 local smw = safe_require("plugins.split-monitor-workspaces")
 if smw then
-	-- workspace_count = 5 → 5 persistent workspaces per monitor, so
-	-- SUPER+1..5 on each monitor are always reachable (and stay bound
+	-- workspace_count = 10 → 10 persistent workspaces per monitor, so
+	-- SUPER+1..10 on each monitor are always reachable (and stay bound
 	-- even when the monitor has no windows yet). To change this, edit
 	-- this number AND smw.get_amount_of_workspaces() will pick it up
 	-- automatically in dms/binds-user.lua's bind loop.
-	smw.setup({ workspace_count = 5, enable_wrapping = true, link_monitors = false })
+	smw.setup({ workspace_count = 10, enable_wrapping = true, link_monitors = false })
 else
 	-- Stub: pretend the plugin has zero workspaces so the bind loop
 	-- in dms/binds-user.lua is a no-op. SUPER+1..N fall through to

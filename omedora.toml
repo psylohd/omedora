@@ -255,6 +255,10 @@ required = [
   "pciutils",
   "plymouth", "plymouth-plugin-script",   # plugin-script is required by omedora theme
   "papirus-icon-theme", # Icon pack
+  # MTP / file-transfer helpers for GNOME Files (nautilus)
+  "gvfs-mtp",            # MTP device support (phones, tablets)
+  "gvfs-afc",            # AFC (Apple) device support
+  "gvfs-gphoto2",        # gPhoto2 (PTP cameras)
 
   # ghostty — SUPER+RETURN terminal launch target. Originally a weak-dep
   # of dms from avengemedia/danklinux, but dnf5 occasionally skips weak

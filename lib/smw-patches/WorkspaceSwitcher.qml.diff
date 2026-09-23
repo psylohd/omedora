@@ -1,0 +1,30 @@
+--- /usr/share/quickshell/dms/Modules/DankBar/Widgets/WorkspaceSwitcher.qml	2026-09-08 08:00:00.000000000 +0800
++++ /home/intox/.config/dms-shell/Modules/DankBar/Widgets/WorkspaceSwitcher.qml	2026-09-21 16:34:35.778943843 +0800
+@@ -771,6 +771,27 @@
+                 return;
+             }
+ 
++            // Check if the current workspace has any toplevels (windows).
++            const hyprlandToplevels = Array.from(Hyprland.toplevels?.values || []);
++            const isCurrentOccupied = hyprlandToplevels.some(tl => tl.workspace?.id === root.currentWorkspace);
++
++            // If current workspace is empty and scrolling forward: stay put.
++            // If current workspace is empty and scrolling backward: go to last occupied.
++            if (!isCurrentOccupied) {
++                if (direction > 0) {
++                    return; // stay
++                }
++                // Find last occupied workspace for backward scroll from empty
++                for (let i = realWorkspaces.length - 1; i >= 0; i--) {
++                    const ws = realWorkspaces[i];
++                    if (hyprlandToplevels.some(tl => tl.workspace?.id === ws.id)) {
++                        HyprlandService.focusWorkspace(hyprlandWorkspaceSelector(ws));
++                        return;
++                    }
++                }
++                return; // no occupied workspaces at all
++            }
++
+             const currentIndex = realWorkspaces.findIndex(ws => ws.id === root.currentWorkspace);
+             const validIndex = currentIndex === -1 ? 0 : currentIndex;
+             const nextIndex = direction > 0 ? Math.min(validIndex + 1, realWorkspaces.length - 1) : Math.max(validIndex - 1, 0);

@@ -1,0 +1,92 @@
+--- /tmp/smw-upstream/lua/dispatchers.lua	2026-09-21 18:41:26.746075871 +0800
++++ /home/intox/.config/hypr/plugins/split-monitor-workspaces/lua/dispatchers.lua	2026-09-21 16:31:28.199212906 +0800
+@@ -50,7 +50,16 @@
+ 		end
+ 	else
+ 		---@type string
+-		local resolved = helpers.get_workspace_from_monitor(current_monitor, workspace_str)
++		local resolved
++		local n = tonumber(workspace_str)
++		if n then
++			-- Numeric key (e.g. "6"): count existing workspaces and go to the Nth,
++			-- creating the next available one if fewer than N exist.
++			resolved = helpers.get_nth_workspace(current_monitor, math.floor(n))
++		else
++			-- Relative offset ("+1", "-1") or named workspace: use standard mapping.
++			resolved = helpers.get_workspace_from_monitor(current_monitor, workspace_str)
++		end
+ 		hl.dispatch(hl.dsp.focus({ workspace = resolved }))
+ 	end
+ end
+@@ -98,6 +107,9 @@
+ 		-- Figure out which workspace is currently active on this monitor, and its index within the monitor's workspace list.
+ 		---@type string|nil
+ 		local active_name = monitor.active_workspace and monitor.active_workspace.name
++		---@type HL.Workspace|nil
++		local active_ws = monitor.active_workspace
++
+ 		---@type integer|nil
+ 		local idx = nil
+ 		for i, name in ipairs(ws_list) do
+@@ -107,7 +119,33 @@
+ 		end
+ 		if not idx then goto continue end
+ 
+-		-- Apply the delta to get the target workspace index, wrapping if necessary and if no_wrap is not set.
++		-- If current workspace is empty (or nil) and we're scrolling forward, stay put.
++		-- If empty and scrolling backward, go to the last occupied workspace.
++		if active_ws == nil or active_ws.is_empty then
++			if delta > 0 then
++				-- Scrolling forward from empty: no-op
++				goto continue
++			else
++				-- Scrolling backward from empty: find the last occupied workspace
++				for i = #ws_list, 1, -1 do
++					local ws = hl.get_workspace(ws_list[i])
++					if ws and not ws.is_empty then
++						idx = i
++						break
++					end
++				end
++				---@type string
++				local target = ws_list[idx]
++				if monitor.id == current_monitor.id then
++					hl.dispatch(hl.dsp.focus({ workspace = target }))
++				else
++					monitor:set_workspace({ workspace = target })
++				end
++				goto continue
++			end
++		end
++
++		-- Advance by delta. If no_wrap is set and we're at the boundary, stop.
+ 		idx = idx + delta
+ 		if idx < 1 then
+ 			if no_wrap then goto continue end
+@@ -117,10 +155,9 @@
+ 			idx = 1
+ 		end
+ 
+-		-- Focus the target workspace. If link_monitors is enabled, also move it to the correct monitor and follow it to ensure all monitors switch together.
++		-- Focus the target workspace (will create it if it doesn't exist yet).
+ 		---@type string
+ 		local target = ws_list[idx]
+-		-- hl.dispatch(hl.dsp.focus({ workspace = target }))
+ 		-- If the monitor being cycled is the current monitor, focus the workspace normally.
+ 		-- Otherwise use set_workspace to avoid stealing focus from the current monitor.
+ 		if monitor.id == current_monitor.id then
+@@ -149,7 +186,13 @@
+ 	end
+ 
+ 	---@type string
+-	local resolved = helpers.get_workspace_from_monitor(monitor, workspace_str)
++	local resolved
++	local n = tonumber(workspace_str)
++	if n then
++		resolved = helpers.get_nth_workspace(monitor, math.floor(n))
++	else
++		resolved = helpers.get_workspace_from_monitor(monitor, workspace_str)
++	end
+ 
+ 	if hl.plugin.hy3 then
+ 		-- Explicit hy3 support: use the hy3-specific dispatchers instead of Hyprland's.

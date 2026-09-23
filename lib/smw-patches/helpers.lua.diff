@@ -1,0 +1,72 @@
+--- /tmp/smw-upstream/lua/helpers.lua	2026-09-21 18:41:26.746260752 +0800
++++ /home/intox/.config/hypr/plugins/split-monitor-workspaces/lua/helpers.lua	2026-09-21 13:55:41.301697400 +0800
+@@ -54,6 +54,16 @@
+ --- Return the currently focused monitor, falling back to the monitor under the cursor.
+ ---@return HL.Monitor|nil
+ function helpers.get_current_monitor()
++	--- Prefer the monitor of the focused workspace (keyboard focus), which
++	--- aligns with how GUI workspace switchers (e.g. DMS) determine the
++	--- current monitor. This avoids the cursor-position fallback producing a
++	--- different monitor than the one the user is actively typing on.
++	--- Falls back to hl.get_active_monitor() (most recently activated window's
++	--- monitor) and finally hl.get_monitor_at_cursor() only when necessary.
++	local focused_ws = hl.get_active_workspace()
++	if focused_ws and focused_ws.monitor then
++		return focused_ws.monitor
++	end
+ 	return hl.get_active_monitor() or hl.get_monitor_at_cursor()
+ end
+ 
+@@ -242,4 +252,52 @@
+ 	return ws_list[idx]
+ end
+ 
++--- Get all workspace names from the monitor's range that have windows (non-empty),
++--- sorted in ascending order.
++---@param monitor HL.Monitor
++---@return string[]
++function helpers.get_occupied_workspaces(monitor)
++	local ws_list = globals.monitor_workspace_map[monitor.id]
++	if not ws_list then return {} end
++	local occupied = {}
++	for _, name in ipairs(ws_list) do
++		local ws = hl.get_workspace(name)
++		-- Only count workspaces that exist AND have at least one window.
++		if ws ~= nil and not ws.is_empty then
++			table.insert(occupied, name)
++		end
++	end
++	return occupied
++end
++
++--- Get the Nth workspace for the current monitor, counting only occupied (non-empty)
++--- workspaces. If fewer than N workspaces have windows, create/fill the next empty slot.
++--- e.g. on monitor 1 (range 11-20): SUPER+1 → 11, SUPER+2 → 12, SUPER+3 → 13.
++--- SUPER+6 (when only 11,12 exist with windows) → 13. Empty persistent workspaces
++--- are treated as gaps to fill, not as occupied slots.
++---@param monitor HL.Monitor
++---@param n integer 1-based index (the key number pressed)
++---@return string workspace name
++function helpers.get_nth_workspace(monitor, n)
++	local ws_list = globals.monitor_workspace_map[monitor.id]
++	if not ws_list then return tostring(n) end
++
++	local occupied = helpers.get_occupied_workspaces(monitor)
++
++	if n <= #occupied then
++		-- Nth workspace with windows already exists
++		return occupied[n]
++	end
++
++	-- Fewer than N occupied; find the first nil-or-empty workspace and use that.
++	for _, name in ipairs(ws_list) do
++		local ws = hl.get_workspace(name)
++		if ws == nil or ws.is_empty then
++			return name
++		end
++	end
++	-- All full; return the last one (will reuse/focus it)
++	return ws_list[#ws_list]
++end
++
+ return helpers

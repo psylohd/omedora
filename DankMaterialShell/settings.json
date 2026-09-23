@@ -64,6 +64,7 @@
     }
   ],
   "groupWorkspaceApps": false,
+  "showOccupiedWorkspacesOnly": true,
   "launcherUseOverlayLayer": true,
   "launcherStyle": "spotlight",
   "networkPreference": "wifi",

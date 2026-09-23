@@ -92,5 +92,32 @@ stage_hyprland_plugins() {
     fi
   done
 
+  # ── Apply omedora smw patches ───────────────────────────────────────────────
+  # Our smw modifications (sequential workspace creation, scroll-empty guard,
+  # focused-monitor fix) live in lib/smw-patches/. Apply them after the
+  # upstream repo is installed so they survive reinstalls.
+  local smw_patches="${OMEDORA_PATH}/lib/smw-patches"
+  if [[ -d "${smw_patches}" ]]; then
+    local smw_target="${plugins_dir}/split-monitor-workspaces"
+    if [[ -d "${smw_target}" ]]; then
+      for patch in "${smw_patches}"/*.diff; do
+        [[ -f "${patch}" ]] || continue
+        local file
+        file="$(basename "${patch}" .diff)"
+        local target_file="${smw_target}/lua/${file}"
+        if [[ -f "${target_file}" ]]; then
+          info "applying smw patch: ${file}"
+          if patch -s -p2 -i "${patch}" "${target_file}"; then
+            info "  ${file} patched ok"
+          else
+            warn "  patch ${file} failed (file may already be patched)"
+          fi
+        else
+          warn "  ${target_file} not found — skipping patch ${patch}"
+        fi
+      done
+    fi
+  fi
+
   info "hyprland plugins stage complete"
 }

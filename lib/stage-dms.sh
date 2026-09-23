@@ -225,4 +225,48 @@ stage_dms() {
       systemctl --user daemon-reload 2>/dev/null \
       || warn "user manager daemon-reload failed (will pick up on next login)"
   fi
+
+  # ── DMS shell override + workspace switcher scroll fix ────────────────────────
+  # DMS ships its QML shell at /usr/share/quickshell/dms/. We maintain a local
+  # override at ~/.config/dms-shell/ (pointed to by DMS_SHELL_DIR) so we can
+  # patch WorkspaceSwitcher.qml with the scroll-empty guard without touching
+  # the system package. The scroll fix mirrors smw's behaviour: occupied scroll
+  # → next; empty scroll next → stay; empty scroll prev → last occupied.
+  local dms_shell_src="/usr/share/quickshell/dms"
+  local dms_shell_dst="${user_home}/.config/dms-shell"
+  local dms_patches="${OMEDORA_PATH}/lib/smw-patches"
+  if [[ -d "${dms_shell_src}" ]]; then
+    install -d -o "${target_user}" -g "${target_user}" -m 0755 "${dms_shell_dst}"
+    # Copy everything from the system DMS shell; don't recurse so the
+    # existing ~/.config/dms-shell (if any) wins for already-patched files.
+    info "copying DMS shell to ${dms_shell_dst}"
+    cp -rn "${dms_shell_src}/"* "${dms_shell_dst}/" 2>/dev/null || true
+    chown -R "${target_user}:${target_user}" "${dms_shell_dst}"
+
+    # Apply WorkspaceSwitcher.qml scroll patch.
+    if [[ -d "${dms_patches}" ]]; then
+      local ws_patch="${dms_patches}/WorkspaceSwitcher.qml.diff"
+      if [[ -f "${ws_patch}" ]]; then
+        local ws_target="${dms_shell_dst}/Modules/DankBar/Widgets/WorkspaceSwitcher.qml"
+        if [[ -f "${ws_target}" ]]; then
+          info "applying DMS WorkspaceSwitcher scroll patch"
+          if patch -s -p1 -i "${ws_patch}" -o "${ws_target}" "${ws_target}"; then
+            info "  WorkspaceSwitcher.qml patched ok"
+          else
+            warn "  patch failed (file may already be patched)"
+          fi
+        fi
+      fi
+    fi
+  fi
+
+  # Add DMS_SHELL_DIR env var to the local dms.service override so the patched
+  # shell is used on every boot without needing systemctl --user set-environment.
+  if [[ -f "${override_unit}" ]]; then
+    if ! grep -q 'DMS_SHELL_DIR=' "${override_unit}"; then
+      sed -i '/^\[Service\]/a Environment="DMS_SHELL_DIR='"${dms_shell_dst}"'"' \
+        "${override_unit}" \
+        || warn "failed to add DMS_SHELL_DIR to dms.service override"
+    fi
+  fi
 }

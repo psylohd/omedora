@@ -126,11 +126,15 @@ end
 local smw = require("plugins.split-monitor-workspaces")
 for i = 1, smw.get_amount_of_workspaces() do
 	local key = tostring(i)
-	hl.bind("SUPER + " .. key,
+	-- SUPER+0..9 are the natural binds; workspace 10 maps to SUPER+SHIFT+0
+	-- (Hyprland uses SHIFT to access the 10th key on the number row).
+	local focus_key  = (i == 10) and "SHIFT + 0" or key
+	local move_key   = (i == 10) and "SHIFT + 0" or ("SHIFT + " .. key)
+	hl.bind("SUPER + " .. focus_key,
 		smw.workspace(key),
 		{ description = "Focus workspace " .. key .. " on this monitor" }
 	)
-	hl.bind("SUPER + SHIFT + " .. key,
+	hl.bind("SUPER + " .. move_key,
 		smw.move_to_workspace(key),
 		{ description = "Move active window to workspace " .. key .. " and follow it" }
 	)
