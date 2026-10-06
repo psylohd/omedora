@@ -31,6 +31,7 @@ local exec_once = {
     -- via systemd) races the IPC socket and breaks notifications.
     "wl-clip-persist --clipboard regular",
     "sh -c 'sleep 3 && easyeffects --gapplication-service'",
+    "~/.local/bin/ws-compact-watch &",
 }
 
 local nvidia_exec_once_optional = {

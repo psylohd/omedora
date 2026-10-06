@@ -1,0 +1,142 @@
+#!/usr/bin/env python3
+# ws-compact — per-monitor workspace compactor for split-monitor-workspaces.
+# Usage: ws-compact [--dry-run]
+#
+# Algorithm: for each monitor, walk workspaces from base upward.
+# For each occupied workspace, if there's an empty slot at or below its
+# target position, move its windows down to fill that slot.
+# Empty persistent workspaces at lower IDs get filled; occupied workspaces
+# shift down to close gaps.
+import subprocess, json, sys, os, re
+
+DRY_RUN = "--dry-run" in sys.argv
+
+def run(cmd):
+    subprocess.run(cmd, shell=True, capture_output=True)
+
+def hyprctl(cmd):
+    r = subprocess.run(f"hyprctl {cmd}", shell=True, capture_output=True, text=True)
+    return r.stdout if r.returncode == 0 else None
+
+BASE_OVERRIDE = {}
+conf = os.path.expanduser("~/.config/ws-compact.conf")
+if os.path.isfile(conf):
+    for line in open(conf):
+        line = line.strip()
+        if line and not line.startswith("#") and "=" in line:
+            m, b = line.split("=", 1)
+            if m.strip() and b.strip().isdigit():
+                BASE_OVERRIDE[m.strip()] = int(b.strip())
+
+ws_data = json.loads(hyprctl("workspaces -j") or "[]")
+clients = json.loads(hyprctl("clients -j") or "[]")
+
+# Per-monitor: list of (ws_id, window_count)
+mon_data = {}
+for w in ws_data:
+    m, wid, name = w.get("monitor",""), w.get("id",0), w.get("name","")
+    if not m or wid <= 0 or not re.match(r"^[0-9]+$", name):
+        continue
+    if m not in mon_data:
+        mon_data[m] = {}
+    mon_data[m][wid] = w.get("windows", 0)
+
+# Per-monitor: base (override or min ID on that monitor)
+monitors = json.loads(hyprctl("monitors -j") or "[]")
+mon_base = {}
+for m in mon_data:
+    if m in BASE_OVERRIDE:
+        mon_base[m] = BASE_OVERRIDE[m]
+    else:
+        mon_base[m] = min(mon_data[m].keys())
+
+def get_clients():
+    return json.loads(hyprctl("clients -j") or "[]")
+
+def move_window(addr, target):
+    run(f'hyprctl dispatch "hl.dsp.window.move({{ window = \\"address:{addr}\\", workspace = {target}, follow = false }})"')
+
+def switch_workspace(ws_id):
+    run(f"hyprctl dispatch 'hl.dsp.focus({{ workspace = {ws_id} }})'")
+
+def compact_monitor(mon):
+    base = mon_base.get(mon, 1)
+    ws_map = mon_data[mon]  # ws_id -> window_count
+
+    # Gather: slots (IDs >= base) and what each holds
+    max_id = max(ws_map.keys())
+    slots = []
+    for wid in range(base, max_id + 1):
+        slots.append({"id": wid, "windows": ws_map.get(wid, 0)})
+
+    # Build target layout: occupied workspaces fill slots sequentially from base.
+    # occupied_ids sorted ascending: [1, 3] with base=1 means
+    # position 0 → slot 1, position 1 → slot 2, etc.
+    occupied_ids = sorted([s["id"] for s in slots if s["windows"] > 0])
+    moves = []
+    for pos, occ_id in enumerate(occupied_ids):
+        target_id = base + pos
+        if occ_id != target_id:
+            moves.append((occ_id, target_id))
+
+    if not moves:
+        return None
+
+    for src, dst in moves:
+        c = get_clients()
+        addrs = [x["address"] for x in c if x.get("workspace", {}).get("id") == src]
+        if not addrs:
+            action = "empty "
+        else:
+            action = ""
+        prefix = "would" if DRY_RUN else "moved"
+        if DRY_RUN:
+            print(f"ws-compact: {prefix}  WS {action}{src} -> {dst} on {mon}")
+        if not DRY_RUN and addrs:
+            for addr in addrs:
+                move_window(addr, dst)
+            print(f"ws-compact: {prefix}  WS {action}{src} -> {dst} on {mon}")
+        elif not DRY_RUN and not addrs:
+            print(f"ws-compact: {prefix}  WS {action}{src} -> {dst} on {mon}")
+
+    # Return the last destination workspace so caller can follow
+    return moves[-1][1] if moves else None
+
+def main():
+    # Capture active workspace per monitor BEFORE moving anything
+    active_ws = {}  # mon -> ws_id
+    for m in monitors:
+        active_ws[m["name"]] = m.get("activeWorkspace", {}).get("id", None)
+
+    # Track (source, destination) pairs per monitor
+    all_moves = {}  # mon -> [(src, dst), ...]
+    for mon in sorted(mon_data.keys()):
+        base = mon_base.get(mon, 1)
+        ws_map = mon_data[mon]
+        max_id = max(ws_map.keys())
+        occupied_ids = sorted([wid for wid in range(base, max_id + 1) if ws_map.get(wid, 0) > 0])
+        moves = []
+        for pos, occ_id in enumerate(occupied_ids):
+            target_id = base + pos
+            if occ_id != target_id:
+                moves.append((occ_id, target_id))
+        all_moves[mon] = moves
+
+    # Execute moves
+    for mon in sorted(mon_data.keys()):
+        compact_monitor(mon)
+
+    # Switch to the destination workspace on each monitor IF the active
+    # workspace was one of the sources that got moved there.
+    if not DRY_RUN:
+        for mon in sorted(all_moves.keys()):
+            cur = active_ws.get(mon)
+            moves = all_moves[mon]
+            for src, dst in moves:
+                if cur == src:
+                    switch_workspace(dst)
+                    print(f"ws-compact: follow workspace to {dst} on {mon}")
+                    break  # only one switch per monitor
+
+if __name__ == "__main__":
+    main()

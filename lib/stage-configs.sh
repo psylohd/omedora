@@ -103,6 +103,15 @@ stage_config_hyprland() {
   chown -R "${OMEDORA_TARGET_USER}:${OMEDORA_TARGET_USER}" "${home}/.config/hypr"
   chown "${OMEDORA_TARGET_USER}:${OMEDORA_TARGET_USER}" "${home}/.config"
 
+  # Install standalone binaries to ~/.local/bin/
+  mkdir -p "${home}/.local/bin"
+  for bin in ws-compact ws-compact-watch; do
+    if [[ -x "${home}/.config/hypr/Scripts/${bin}" ]]; then
+      install -m 0755 "${home}/.config/hypr/Scripts/${bin}" "${home}/.local/bin/${bin}"
+      chown "${OMEDORA_TARGET_USER}:${OMEDORA_TARGET_USER}" "${home}/.local/bin/${bin}"
+    fi
+  done
+
   # If the user configured [hyprland].monitors in omedora.toml, append
   # them as `monitor = "..."` lines to the deployed hyprland.lua so
   # they're active on first boot, before dms has had a chance to write
