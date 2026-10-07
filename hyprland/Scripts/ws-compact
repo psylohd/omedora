@@ -59,9 +59,14 @@ def move_window(addr, target):
 def switch_workspace(ws_id):
     run(f"hyprctl dispatch 'hl.dsp.focus({{ workspace = {ws_id} }})'")
 
-def compact_monitor(mon):
+def compact_monitor(mon, active_ws_id):
     base = mon_base.get(mon, 1)
     ws_map = mon_data[mon]  # ws_id -> window_count
+
+    # Don't compact if the active workspace is empty — we'd just shift
+    # everything down and repopulate the freshly cleared active workspace.
+    if ws_map.get(active_ws_id, 0) == 0:
+        return None
 
     # Gather: slots (IDs >= base) and what each holds
     max_id = max(ws_map.keys())
@@ -124,7 +129,7 @@ def main():
 
     # Execute moves
     for mon in sorted(mon_data.keys()):
-        compact_monitor(mon)
+        compact_monitor(mon, active_ws.get(mon))
 
     # Switch to the destination workspace on each monitor IF the active
     # workspace was one of the sources that got moved there.
